@@ -1,0 +1,11 @@
+[
+  {
+    "id": 1, 
+    "name": "Robusta", 
+    "country": "Kenya", 
+    "weight": 120, 
+    "manufacture": "Java", 
+    "grade": 1, 
+    "expiry_date": "2025-05-01"
+  }
+]
