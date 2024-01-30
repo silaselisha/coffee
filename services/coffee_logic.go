@@ -1,4 +1,4 @@
-package main
+package services
 
 import (
 	"context"
@@ -9,16 +9,25 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
+  "github.com/silaselisha/coffee-api/store"
 )
 
-func handleFuncDecorator(handle func(ctx context.Context, w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		handle(context.Background(), w, r)
-	}
+type ProductCoffeeI interface {
+  CreateCoffeeHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 }
 
-func (s *MongoStore) CreateCoffeeHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection, err := s.Collection(ctx, "coffeeshop", "coffee")
+type ProductCoffee struct {
+	db store.Store
+}
+
+func NewProduct(storage store.Store) ProductCoffeeI {
+  return &ProductCoffee {
+    db: storage,
+  }
+}
+
+func (s *ProductCoffee) CreateCoffeeHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection, err := s.db.Collection(ctx, "coffeeshop", "coffee")
 	if err != nil {
 		w.Write([]byte("invalid operation"))
 		return err

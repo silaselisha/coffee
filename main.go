@@ -10,29 +10,37 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/silaselisha/coffee-api/services"
+	"github.com/silaselisha/coffee-api/store"
+	"github.com/silaselisha/coffee-api/util"
 	"github.com/sirupsen/logrus"
 )
 
-const SERVER_ADDRES = ":3000"
 
 func main() {
-	client, err := Connect(context.Background(), "mongodb+srv://elisilas:i2CRksrspvydFl3S@cluster0.57zzc5l.mongodb.net/?retryWrites=true&w=majority")
+	config, err := util.LoadEnvs(".")
 	if err != nil {
 		log.Print(err)
 	}
-  defer func() {
-    if err := client.Disconnect(context.Background()); err != nil {
-      log.Panic(err)
-    }
-  }()
 
-	storage := NewStore(client)
+	client, err := util.Connect(context.Background(), config.DBUri)
+	if err != nil {
+		log.Print(err)
+	}
+	defer func() {
+		if err := client.Disconnect(context.Background()); err != nil {
+			log.Panic(err)
+		}
+	}()
+
+	storage := store.NewStore(client)
+	products := services.NewProduct(storage)
 	router := mux.NewRouter()
-  postRouter := router.Methods(http.MethodPost).Subrouter()
-  postRouter.HandleFunc("/coffee", handleFuncDecorator(storage.CreateCoffeeHandler))
+	postRouter := router.Methods(http.MethodPost).Subrouter()
+	postRouter.HandleFunc("/coffee", util.HandleFuncDecorator(products.CreateCoffeeHandler))
 
 	go func() {
-		err := http.ListenAndServe(SERVER_ADDRES, router)
+		err := http.ListenAndServe(config.ServerAddrs, router)
 		if err != nil {
 			logrus.Fatal(err)
 		}
@@ -47,7 +55,7 @@ func main() {
 	defer cancel()
 
 	server := http.Server{
-		Addr:         SERVER_ADDRES,
+		Addr:         config.ServerAddrs,
 		IdleTimeout:  120 * time.Second,
 		ReadTimeout:  2 * time.Second,
 		WriteTimeout: 2 * time.Second,
