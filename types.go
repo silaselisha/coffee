@@ -1,14 +1,18 @@
 package main
 
-type coffee struct {
-	Id          _id    `json:"_id"`
-	Name        string `json:"name"`
-	Country     string `json:"country"`
-	Weight      int32  `json:"weight"`
-	Manufacture string `json:"manufacture"`
-	Grade       int32  `json:"grade"`
-	ExpiryDate  string `json:"expiry_date"`
-}
+import (
+	"time"
 
-type _id int64
-type coffeeList []*coffee
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+type coffee struct {
+	Id          primitive.ObjectID `bson:"_id"`
+	Name        string             `bson:"name"`
+	Country     string             `bson:"country"`
+	Weight      int32              `bson:"weight"`
+	Manufacture string             `bson:"manufacture"`
+	Grade       int32              `bson:"grade"`
+	CreatedAt   time.Time          `bson:"created_at"`
+	UpdatedAt   time.Time          `bson:"updated_at"`
+}
