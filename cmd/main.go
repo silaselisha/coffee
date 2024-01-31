@@ -36,12 +36,21 @@ func main() {
 	}()
 
 	validate = validator.New(validator.WithRequiredStructEnabled())
-	
+
 	storage := store.NewStore(client)
 	products := products.NewProduct(storage)
 	router := mux.NewRouter()
+	getRouter := router.Methods(http.MethodGet).Subrouter()
 	postRouter := router.Methods(http.MethodPost).Subrouter()
-	postRouter.HandleFunc("/coffee", util.HandleFuncDecorator(products.CreateProductHandler))
+	deleteRouter := router.Methods(http.MethodDelete).Subrouter()
+	updateRouter := router.Methods(http.MethodPut).Subrouter()
+
+	postRouter.HandleFunc("/products", util.HandleFuncDecorator(products.CreateProductHandler))
+	getRouter.HandleFunc("/products", util.HandleFuncDecorator(products.GetAllProductHandler))
+	getRouter.HandleFunc("/products/{category}/{id:[0-9a-zA-Z]{24}$}", util.HandleFuncDecorator(products.GetProductByIdHandler))
+	deleteRouter.HandleFunc("/products/{id:[0-9a-zA-Z]{24}$}", util.HandleFuncDecorator(products.DeleteProductByIdHandler))
+	updateRouter.HandleFunc("/products/{id:[0-9a-zA-Z]{24}$}", util.HandleFuncDecorator(products.UpdateProductHandler))
+
 
 	go func() {
 		err := http.ListenAndServe(config.ServerAddrs, router)
