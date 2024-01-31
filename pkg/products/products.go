@@ -12,22 +12,43 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type ProductInter interface {
+type ProductStore interface {
 	CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
+	UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
+	DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
+	GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
+	GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 }
 
-type Product struct {
+type ProductHandler struct {
 	db store.Store
 }
 
-func NewProduct(storage store.Store) ProductInter {
-	return &Product{
+func NewProduct(storage store.Store) ProductStore {
+	return &ProductHandler{
 		db: storage,
 	}
 }
 
-func (s *Product) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection, err := s.db.Collection(ctx, "coffeeshop", "products", "name")
+func(h *ProductHandler) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func(h *ProductHandler) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func(h *ProductHandler) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+
+func(h *ProductHandler) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (h *ProductHandler) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection, err := h.db.Collection(ctx, "coffeeshop", "products", "name")
 	if err != nil {
 		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
 	}
