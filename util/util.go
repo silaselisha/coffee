@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/spf13/viper"
@@ -50,4 +51,11 @@ func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
 		return nil, err
 	}
 	return client, nil
+}
+
+func ResponseHandler(w http.ResponseWriter, message any, status int) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	return json.NewEncoder(w).Encode(message)
 }
