@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -24,13 +25,16 @@ func NewStore(client *mongo.Client) Store {
 
 func (ms *MongoStore) Collection(ctx context.Context, db, coll, field string) (*mongo.Collection, error) {
 	collection := ms.client.Database(db).Collection(coll)
-	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: field, Value: 1}},
-		Options: options.Index().SetUnique(true),
-	})
-
-	if err != nil {
-		return nil, err
+	if field != "" && len(field) > 0 {
+		fmt.Println(field)
+		_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: field, Value: 1}},
+			Options: options.Index().SetUnique(true),
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return collection, nil
 }
