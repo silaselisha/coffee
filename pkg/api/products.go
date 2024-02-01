@@ -1,4 +1,4 @@
-package products
+package api
 
 import (
 	"context"
@@ -8,72 +8,51 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/util"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type ProductStore interface {
-	CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
-	UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
-	DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
-	GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
-	GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
-}
-
-type ProductHandler struct {
-	db store.Store
-}
-
 type UpdateProductParams struct {
-	Name        string   `json:"name"`
-	Price       float64  `json:"price"`
-	Images      []string `json:"iamges"`
-	Summary     string   `json:"summary"`
-	Category    string   `json:"category"`
-	Thumbnail   string   `json:"thumbnail"`
-	Description string   `json:"Description"`
-	Ingridients []string `json:"ingridients"`
+	Name        string   `bson:"name"`
+	Price       float64  `bson:"price"`
+	Images      []string `bson:"iamges"`
+	Summary     string   `bson:"summary"`
+	Category    string   `bson:"category"`
+	Thumbnail   string   `bson:"thumbnail"`
+	Description string   `bson:"Description"`
+	Ingridients []string `bson:"ingridients"`
 }
 
-func NewProduct(storage store.Store) ProductStore {
-	return &ProductHandler{
-		db: storage,
-	}
-}
-
-func (h *ProductHandler) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection, err := h.db.Collection(ctx, "coffeeshop", "products", "")
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
+func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := h.db.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
+		return util.ResponseHandler(w, "invalid product", http.StatusBadRequest)
 	}
+
 	dataBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	var data UpdateProductParams
+	var data map[string]interface{}
 	if err := json.Unmarshal(dataBytes, &data); err != nil {
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	// update data dynamically
 	var updatedDocument Item
 	filter := bson.D{{Key: "_id", Value: id}}
-	update := bson.D{{Key: "$set", Value: data}}
+	update := bson.M{"$set": data}
 
 	err = collection.FindOneAndUpdate(ctx, filter, update).Decode(&updatedDocument)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, err, http.StatusBadRequest)
+			return util.ResponseHandler(w, err, http.StatusNotFound)
 		}
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -81,11 +60,8 @@ func (h *ProductHandler) UpdateProductHandler(ctx context.Context, w http.Respon
 	return nil
 }
 
-func (h *ProductHandler) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection, err := h.db.Collection(ctx, "coffeeshop", "products", "")
-	if err != nil {
-		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
-	}
+func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := h.db.Collection(ctx, "coffeeshop", "products")
 
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
@@ -107,11 +83,8 @@ func (h *ProductHandler) GetAllProductHandler(ctx context.Context, w http.Respon
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (h *ProductHandler) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection, err := h.db.Collection(ctx, "coffeeshop", "products", "")
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
+func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := h.db.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -134,11 +107,9 @@ func (h *ProductHandler) GetProductByIdHandler(ctx context.Context, w http.Respo
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (h *ProductHandler) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection, err := h.db.Collection(ctx, "coffeeshop", "products", "")
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
+func (h *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := h.db.Collection(ctx, "coffeeshop", "products")
+
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
 	if err != nil {
@@ -158,10 +129,15 @@ func (h *ProductHandler) DeleteProductByIdHandler(ctx context.Context, w http.Re
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 
-func (h *ProductHandler) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection, err := h.db.Collection(ctx, "coffeeshop", "products", "name")
+func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := h.db.Collection(ctx, "coffeeshop", "products")
+
+	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "name", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
 	if err != nil {
-		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
 	var data Item

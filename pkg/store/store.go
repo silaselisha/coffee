@@ -2,39 +2,25 @@ package store
 
 import (
 	"context"
-	"fmt"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type Store interface {
-	Collection(ctx context.Context, db, collection, field string) (*mongo.Collection, error)
+type Mongo interface {
+	Collection(ctx context.Context, db, collection string) *mongo.Collection
 }
 
-type MongoStore struct {
+type MongoClient struct {
 	client *mongo.Client
 }
 
-func NewStore(client *mongo.Client) Store {
-	return &MongoStore{
+func NewMongoClient(client *mongo.Client) Mongo {
+	return &MongoClient{
 		client: client,
 	}
 }
 
-func (ms *MongoStore) Collection(ctx context.Context, db, coll, field string) (*mongo.Collection, error) {
+func (ms *MongoClient) Collection(ctx context.Context, db, coll string) *mongo.Collection {
 	collection := ms.client.Database(db).Collection(coll)
-	if field != "" && len(field) > 0 {
-		fmt.Println(field)
-		_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: field, Value: 1}},
-			Options: options.Index().SetUnique(true),
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return collection, nil
+	return collection
 }
