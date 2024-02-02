@@ -12,6 +12,8 @@ import (
 )
 
 var testMonogoStore store.Mongo
+var product Item
+var id string
 
 func TestMain(m *testing.M) {
 	fmt.Println("RUNNING")
@@ -25,7 +27,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	testMonogoStore = store.NewMongoClient(client)
 
+	testMonogoStore = store.NewMongoClient(client)
+	product = createNewProduct()
 	os.Exit(m.Run())
 }

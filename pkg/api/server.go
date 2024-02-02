@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/util"
@@ -11,12 +12,16 @@ import (
 type Server struct {
 	Router *mux.Router
 	db store.Mongo
+	vd *validator.Validate
 	store.Querier
 }
 
 func NewServer(store store.Mongo) *Server {
 	server := &Server{db: store}
 	router := mux.NewRouter()
+
+	validate := validator.New(validator.WithRequiredStructEnabled())
+	server.vd = validate
 
 	getRouter := router.Methods(http.MethodGet).Subrouter()
 	postRouter := router.Methods(http.MethodPost).Subrouter()

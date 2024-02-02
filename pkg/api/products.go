@@ -137,18 +137,23 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		Options: options.Index().SetUnique(true),
 	})
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
 	var data Item
 	coffeeBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		return util.ResponseHandler(w, "invalid read operation on data", http.StatusBadRequest)
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
 	err = json.Unmarshal(coffeeBytes, &data)
 	if err != nil {
 		return util.ResponseHandler(w, "invalid unmarshal operation on data", http.StatusBadRequest)
+	}
+
+	err = h.vd.Struct(data)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
 	data.CreatedAt = time.Now()
@@ -159,6 +164,6 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
-
+ 	
 	return util.ResponseHandler(w, result, http.StatusCreated)
 }
