@@ -7,7 +7,7 @@ import (
 
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/api"
-	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/pkg/util"
 	"github.com/sirupsen/logrus"
 )
 

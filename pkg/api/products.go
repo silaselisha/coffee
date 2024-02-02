@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/pkg/util"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -164,6 +164,6 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
- 	
+
 	return util.ResponseHandler(w, result, http.StatusCreated)
 }

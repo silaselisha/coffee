@@ -59,3 +59,7 @@ func ResponseHandler(w http.ResponseWriter, message any, status int) error {
 
 	return json.NewEncoder(w).Encode(message)
 }
+
+func ImageProcessing() {
+
+}

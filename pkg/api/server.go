@@ -6,7 +6,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/pkg/util"
 )
 
 type Server struct {
