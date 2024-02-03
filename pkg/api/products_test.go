@@ -8,12 +8,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreateProducts(t *testing.T) {
+func TestCreateProduct(t *testing.T) {
 	var tests = []struct {
 		name  string
 		body  map[string]interface{}
@@ -84,12 +83,15 @@ func TestCreateProducts(t *testing.T) {
 			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(dataBytes))
 			require.NoError(t, err)
 
-			server.Router.ServeHTTP(recorder, request)
+			mux, ok := server.(*Server)
+			require.Equal(t, true, ok)
+
+			mux.Router.ServeHTTP(recorder, request)
 			test.check(t, recorder)
 		})
 	}
 }
-func TestUpdateProducts(t *testing.T) {
+func TestUpdateProduct(t *testing.T) {
 	var tests = []struct {
 		name  string
 		body  map[string]interface{}
@@ -98,9 +100,9 @@ func TestUpdateProducts(t *testing.T) {
 	}{
 		{
 			name: "update a product",
-			id: id,
+			id:   id,
 			body: map[string]interface{}{
-				"price":       product.Price,
+				"price": product.Price,
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -108,9 +110,9 @@ func TestUpdateProducts(t *testing.T) {
 		},
 		{
 			name: "update product by invalid id",
-			id: "65bcc06cbc92379c5b6fe79b",
+			id:   "65bcc06cbc92379c5b6fe79b",
 			body: map[string]interface{}{
-				"price":       product.Price,
+				"price": product.Price,
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -130,13 +132,16 @@ func TestUpdateProducts(t *testing.T) {
 			request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(dataBytes))
 			require.NoError(t, err)
 
-			server.Router.ServeHTTP(recorder, request)
+			mux, ok := server.(*Server)
+			require.Equal(t, true, ok)
+
+			mux.Router.ServeHTTP(recorder, request)
 			test.check(t, recorder)
 		})
 	}
 }
 
-func TestGetAllProducts(t *testing.T) {
+func TestGetAllProduct(t *testing.T) {
 	tests := []struct {
 		name  string
 		check func(t *testing.T, recorder *httptest.ResponseRecorder)
@@ -158,12 +163,15 @@ func TestGetAllProducts(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			server.Router.ServeHTTP(recorder, request)
+			mux, ok := server.(*Server)
+			require.Equal(t, true, ok)
+
+			mux.Router.ServeHTTP(recorder, request)
 			test.check(t, recorder)
 		})
 	}
 }
-func TestGetProducts(t *testing.T) {
+func TestGetProduct(t *testing.T) {
 	tests := []struct {
 		name     string
 		category map[string]interface{}
@@ -205,13 +213,16 @@ func TestGetProducts(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			server.Router.ServeHTTP(recorder, request)
+			mux, ok := server.(*Server)
+			require.Equal(t, true, ok)
+
+			mux.Router.ServeHTTP(recorder, request)
 			test.check(t, recorder)
 		})
 	}
 }
 
-func TestDeleteProducts(t *testing.T) {
+func TestDeleteProduct(t *testing.T) {
 	tests := []struct {
 		name  string
 		id    string
@@ -242,26 +253,11 @@ func TestDeleteProducts(t *testing.T) {
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 
-			server.Router.ServeHTTP(recorder, request)
+			mux, ok := server.(*Server)
+			require.Equal(t, true, ok)
+
+			mux.Router.ServeHTTP(recorder, request)
 			test.check(t, recorder)
 		})
 	}
-}
-
-func createNewProduct() Item {
-
-	product := Item{
-		Name:        "Caffe Latte",
-		Price:       4.50,
-		Description: "A cafe latte is a popular coffee drink that consists of espresso and steamed milk, topped with a thin layer of foam. It is perfect for those who enjoy a smooth and creamy coffee with a balanced flavor. At our coffee shop, we use high-quality beans and fresh milk to make our cafe lattes, and we can customize them with different syrups, spices, or whipped cream. ☕",
-		Summary:     "A cafe latte is a coffee drink made with espresso and steamed milk, with a thin layer of foam on top. It has a smooth and creamy taste, and can be customized with different flavors. Our coffee shop offers high-quality and fresh cafe lattes for any occasion.🍵",
-		Images:      []string{"caffelatte.jpeg", "lattecafe.jpeg"},
-		Thumbnail:   "thumbnail.jpeg",
-		Category:    "beverages",
-		Ingridients: []string{"Espresso", "Milk", "Falvored syrup"},
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-
-	return product
 }

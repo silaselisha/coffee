@@ -13,11 +13,10 @@ type Server struct {
 	Router *mux.Router
 	db store.Mongo
 	vd *validator.Validate
-	store.Querier
 }
 
-func NewServer(store store.Mongo) *Server {
-	server := &Server{db: store}
+func NewServer(store store.Mongo) store.Querier {
+	server := &Server{ db: store }
 	router := mux.NewRouter()
 
 	validate := validator.New(validator.WithRequiredStructEnabled())

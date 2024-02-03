@@ -29,8 +29,12 @@ func main() {
 
 	storage := store.NewMongoClient(client)
 	server := api.NewServer(storage)
-
-	err = http.ListenAndServe(config.ServerAddrs, server.Router)
+	router, ok := server.(*api.Server)
+	if !ok {
+		logrus.Error("internal server error")
+	}
+	
+	err = http.ListenAndServe(config.ServerAddrs, router.Router)
 	if err != nil {
 		logrus.Fatal(err)
 	}

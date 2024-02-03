@@ -12,7 +12,7 @@ import (
 )
 
 var testMonogoStore store.Mongo
-var product Item
+var product store.Item
 var id string
 
 func TestMain(m *testing.M) {
@@ -29,6 +29,6 @@ func TestMain(m *testing.M) {
 	}
 
 	testMonogoStore = store.NewMongoClient(client)
-	product = createNewProduct()
+	product = util.CreateNewProduct()
 	os.Exit(m.Run())
 }

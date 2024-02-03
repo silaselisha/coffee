@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/util"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -45,7 +46,7 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	var updatedDocument Item
+	var updatedDocument store.Item
 	filter := bson.D{{Key: "_id", Value: id}}
 	update := bson.M{"$set": data}
 
@@ -69,9 +70,9 @@ func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter
 	}
 	defer cur.Close(ctx)
 
-	var result ItemList
+	var result store.ItemList
 	for cur.Next(ctx) {
-		item := new(Item)
+		item := new(store.Item)
 		err := cur.Decode(&item)
 		if err != nil {
 			return util.ResponseHandler(w, err, http.StatusInternalServerError)
@@ -95,7 +96,7 @@ func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
 	cur := collection.FindOne(ctx, filter)
 
-	var result Item
+	var result store.Item
 	err = cur.Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -140,30 +141,11 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	var data Item
-	coffeeBytes, err := io.ReadAll(r.Body)
+	fileName, err := util.ImageProcessor("images", r)
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-
-	err = json.Unmarshal(coffeeBytes, &data)
-	if err != nil {
-		return util.ResponseHandler(w, "invalid unmarshal operation on data", http.StatusBadRequest)
-	}
-
-	err = h.vd.Struct(data)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-
-	data.CreatedAt = time.Now()
-	data.UpdatedAt = time.Now()
-	data.Id = primitive.NewObjectID()
-
-	result, err := collection.InsertOne(ctx, data)
-	if err != nil {
+		log.Print(err)
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	return util.ResponseHandler(w, result, http.StatusCreated)
+	return util.ResponseHandler(w, fileName, http.StatusOK)
 }

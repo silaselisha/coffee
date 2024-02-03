@@ -3,12 +3,19 @@ package util
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
+	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"github.com/google/uuid"
 )
 
 type Config struct {
@@ -60,6 +67,41 @@ func ResponseHandler(w http.ResponseWriter, message any, status int) error {
 	return json.NewEncoder(w).Encode(message)
 }
 
-func ImageProcessing() {
+func CreateNewProduct() store.Item {
+	product := store.Item{
+		Name:        "Caffe Latte",
+		Price:       4.50,
+		Description: "A cafe latte is a popular coffee drink that consists of espresso and steamed milk, topped with a thin layer of foam. It is perfect for those who enjoy a smooth and creamy coffee with a balanced flavor. At our coffee shop, we use high-quality beans and fresh milk to make our cafe lattes, and we can customize them with different syrups, spices, or whipped cream. ☕",
+		Summary:     "A cafe latte is a coffee drink made with espresso and steamed milk, with a thin layer of foam on top. It has a smooth and creamy taste, and can be customized with different flavors. Our coffee shop offers high-quality and fresh cafe lattes for any occasion.🍵",
+		Images:      []string{"caffelatte.jpeg", "lattecafe.jpeg"},
+		Thumbnail:   "thumbnail.jpeg",
+		Category:    "beverages",
+		Ingridients: []string{"Espresso", "Milk", "Falvored syrup"},
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
 
+	return product
+}
+
+func ImageProcessor(key string, r *http.Request) (fileName string, err error) {
+	file, _, err := r.FormFile(key)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	imageBytes, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+
+	mimeType := strings.Split(http.DetectContentType(imageBytes), "/")[1]
+	fileName = fmt.Sprintf("%s.%s", uuid.New().String(), mimeType)
+	err = os.WriteFile(fileName, imageBytes, 0666)
+	if err != nil {
+		return "", err
+	}
+	
+	return
 }
