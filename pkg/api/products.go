@@ -150,6 +150,14 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
+	//👨🏾‍💻uploading a thumbnail during product creation
+    // optionally upload thumbnail to AWS upon product creation
+	// thumbnail file should be an IMAGE in (png,svg,jpeg)
+	// image compression and resizing before saving the image 
+	go func() {
+
+	}()
+
 	var product store.Item
 	price, err := strconv.ParseFloat(r.FormValue("price"), 64)
 	if err != nil {

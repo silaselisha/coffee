@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -17,16 +18,16 @@ import (
 func TestCreateProduct(t *testing.T) {
 
 	var tests = []struct {
-		name  string
-		body  func() (*bytes.Buffer, *multipart.Writer)
-		check func(t *testing.T, recorder *httptest.ResponseRecorder)
+		name       string
+		bodyWriter func() (*bytes.Buffer, *multipart.Writer)
+		check      func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name: "create a product",
-			body: func() (*bytes.Buffer, *multipart.Writer) {
+			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
-
+				
 				writer.WriteField("name", product.Name)
 				writer.WriteField("price", strconv.FormatFloat(product.Price, 'E', -1, 64))
 				writer.WriteField("summary", product.Summary)
@@ -39,6 +40,13 @@ func TestCreateProduct(t *testing.T) {
 				return body, writer
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				dataBytes, err := io.ReadAll(recorder.Body)
+				require.Equal(t, nil, err)
+				var productId string
+				err = json.Unmarshal(dataBytes, &productId)
+				require.Equal(t, nil, err)
+				id = productId
+				require.NotEmpty(t, id)
 				require.Equal(t, http.StatusCreated, recorder.Code)
 			},
 		},
@@ -51,7 +59,7 @@ func TestCreateProduct(t *testing.T) {
 
 			url := "/products"
 			recorder := httptest.NewRecorder()
-			body, writer := test.body()
+			body, writer := test.bodyWriter()
 			request, err := http.NewRequest(http.MethodPost, url, body)
 			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 			require.NoError(t, err)
