@@ -5,17 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-	"github.com/google/uuid"
 )
 
 type Config struct {
@@ -87,6 +88,7 @@ func CreateNewProduct() store.Item {
 func ImageProcessor(key string, r *http.Request) (fileName string, err error) {
 	file, _, err := r.FormFile(key)
 	if err != nil {
+		log.Print(err)
 		return "", err
 	}
 	defer file.Close()
@@ -102,6 +104,6 @@ func ImageProcessor(key string, r *http.Request) (fileName string, err error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	return
 }

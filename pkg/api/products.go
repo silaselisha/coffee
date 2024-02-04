@@ -6,6 +6,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
@@ -141,11 +144,37 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	fileName, err := util.ImageProcessor("images", r)
+	err = r.ParseMultipartForm(int64(32 << 20))
 	if err != nil {
 		log.Print(err)
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+
+	var product store.Item
+	price, err := strconv.ParseFloat(r.FormValue("price"), 64)
+	if err != nil {
+		log.Print(err)
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+
+	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
+
+	product = store.Item{
+		Id:          primitive.NewObjectID(),
+		Name:        r.FormValue("name"),
+		Price:       price,
+		Summary:     r.FormValue("summary"),
+		Category:    r.FormValue("category"),
+		Description: r.FormValue("description"),
+		Ingridients: ingridients,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	result, err := collection.InsertOne(ctx, product)
+	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	return util.ResponseHandler(w, fileName, http.StatusOK)
+	return util.ResponseHandler(w, result.InsertedID, http.StatusCreated)
 }

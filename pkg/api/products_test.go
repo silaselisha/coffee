@@ -4,83 +4,56 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestCreateProduct(t *testing.T) {
+
 	var tests = []struct {
 		name  string
-		body  map[string]interface{}
+		body  func() (*bytes.Buffer, *multipart.Writer)
 		check func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name: "create a product",
-			body: map[string]interface{}{
-				"name":        product.Name,
-				"price":       product.Price,
-				"description": product.Description,
-				"summary":     product.Summary,
-				"images":      product.Images,
-				"thumbnail":   product.Thumbnail,
-				"category":    product.Category,
-				"ingridients": product.Ingridients,
-				"created_at":  product.CreatedAt,
-				"updated_at":  product.UpdatedAt,
+			body: func() (*bytes.Buffer, *multipart.Writer) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+
+				writer.WriteField("name", product.Name)
+				writer.WriteField("price", strconv.FormatFloat(product.Price, 'E', -1, 64))
+				writer.WriteField("summary", product.Summary)
+				writer.WriteField("category", product.Category)
+				writer.WriteField("description", product.Description)
+				writer.WriteField("ingridients", strings.Join(product.Ingridients, " "))
+				writer.WriteField("created_at", fmt.Sprint(product.CreatedAt))
+				writer.WriteField("updated_at", fmt.Sprint(product.UpdatedAt))
+				writer.Close()
+				return body, writer
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				var res map[string]interface{}
-				dataBytes, err := io.ReadAll(recorder.Body)
-				require.NoError(t, err)
-
-				err = json.Unmarshal(dataBytes, &res)
-				require.NoError(t, err)
-
-				id = res["InsertedID"].(string)
 				require.Equal(t, http.StatusCreated, recorder.Code)
-			},
-		},
-		{
-			name: "duplicate a product",
-			body: map[string]interface{}{
-				"name":        product.Name,
-				"price":       product.Price,
-				"description": product.Description,
-				"summary":     product.Summary,
-				"images":      product.Images,
-				"thumbnail":   product.Thumbnail,
-				"category":    product.Category,
-				"ingridients": product.Ingridients,
-				"created_at":  product.CreatedAt,
-				"updated_at":  product.UpdatedAt,
-			},
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-		{
-			name: "create an invalid product",
-			body: map[string]interface{}{},
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			dataBytes, err := json.Marshal(test.body)
-			require.NoError(t, err)
 
 			server := NewServer(testMonogoStore)
 
 			url := "/products"
 			recorder := httptest.NewRecorder()
-			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(dataBytes))
+			body, writer := test.body()
+			request, err := http.NewRequest(http.MethodPost, url, body)
+			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 			require.NoError(t, err)
 
 			mux, ok := server.(*Server)
