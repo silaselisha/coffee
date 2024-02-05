@@ -11,12 +11,12 @@ import (
 
 type Server struct {
 	Router *mux.Router
-	db store.Mongo
-	vd *validator.Validate
+	db     store.Mongo
+	vd     *validator.Validate
 }
 
 func NewServer(store store.Mongo) store.Querier {
-	server := &Server{ db: store }
+	server := &Server{db: store}
 	router := mux.NewRouter()
 
 	validate := validator.New(validator.WithRequiredStructEnabled())
@@ -29,9 +29,9 @@ func NewServer(store store.Mongo) store.Querier {
 
 	postRouter.HandleFunc("/products", util.HandleFuncDecorator(server.CreateProductHandler))
 	getRouter.HandleFunc("/products", util.HandleFuncDecorator(server.GetAllProductHandler))
-	getRouter.HandleFunc("/products/{category}/{id:[0-9a-zA-Z]{24}$}", util.HandleFuncDecorator(server.GetProductByIdHandler))
-	deleteRouter.HandleFunc("/products/{id:[0-9a-zA-Z]{24}$}", util.HandleFuncDecorator(server.DeleteProductByIdHandler))
-	updateRouter.HandleFunc("/products/{id:[0-9a-zA-Z]{24}$}", util.HandleFuncDecorator(server.UpdateProductHandler))
+	getRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(server.GetProductByIdHandler))
+	deleteRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(server.DeleteProductByIdHandler))
+	updateRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(server.UpdateProductHandler))
 
 	server.Router = router
 	return server

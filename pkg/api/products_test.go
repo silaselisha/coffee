@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -27,16 +31,25 @@ func TestCreateProduct(t *testing.T) {
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
-				
+
 				writer.WriteField("name", product.Name)
 				writer.WriteField("price", strconv.FormatFloat(product.Price, 'E', -1, 64))
 				writer.WriteField("summary", product.Summary)
 				writer.WriteField("category", product.Category)
 				writer.WriteField("description", product.Description)
 				writer.WriteField("ingridients", strings.Join(product.Ingridients, " "))
+
+				palette := []color.Color{color.Black, color.White}
+
+				w, err := writer.CreateFormFile("thumbnail", "thumbnail.jpeg")
+				require.NoError(t, err)
+				img := image.NewPaletted(image.Rect(0, 0, 800, 400), palette)
+				err = png.Encode(w, img)
+				require.NoError(t, err)
+
 				writer.WriteField("created_at", fmt.Sprint(product.CreatedAt))
 				writer.WriteField("updated_at", fmt.Sprint(product.UpdatedAt))
-				writer.Close()
+				defer writer.Close()
 				return body, writer
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
@@ -46,8 +59,74 @@ func TestCreateProduct(t *testing.T) {
 				err = json.Unmarshal(dataBytes, &productId)
 				require.Equal(t, nil, err)
 				id = productId
+				log.Println(id)
 				require.NotEmpty(t, id)
 				require.Equal(t, http.StatusCreated, recorder.Code)
+			},
+		},
+		{
+			name: "create a duplicate product",
+			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+
+				writer.WriteField("name", product.Name)
+				writer.WriteField("price", strconv.FormatFloat(product.Price, 'E', -1, 64))
+				writer.WriteField("summary", product.Summary)
+				writer.WriteField("category", product.Category)
+				writer.WriteField("description", product.Description)
+				writer.WriteField("ingridients", strings.Join(product.Ingridients, " "))
+
+				palette := []color.Color{color.Black, color.White}
+
+				w, err := writer.CreateFormFile("thumbnail", "thumbnail.jpeg")
+				require.NoError(t, err)
+				img := image.NewPaletted(image.Rect(0, 0, 800, 400), palette)
+				err = png.Encode(w, img)
+				require.NoError(t, err)
+
+				writer.WriteField("created_at", fmt.Sprint(product.CreatedAt))
+				writer.WriteField("updated_at", fmt.Sprint(product.UpdatedAt))
+				defer writer.Close()
+				return body, writer
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+		{
+			name: "create a product without thumbnail",
+			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+
+				writer.WriteField("name", product.Name)
+				writer.WriteField("price", strconv.FormatFloat(product.Price, 'E', -1, 64))
+				writer.WriteField("summary", product.Summary)
+				writer.WriteField("category", product.Category)
+				writer.WriteField("description", product.Description)
+				writer.WriteField("ingridients", strings.Join(product.Ingridients, " "))
+
+				writer.WriteField("created_at", fmt.Sprint(product.CreatedAt))
+				writer.WriteField("updated_at", fmt.Sprint(product.UpdatedAt))
+				defer writer.Close()
+				return body, writer
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "create an invalid product",
+			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+
+				defer writer.Close()
+				return body, writer
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
@@ -97,6 +176,14 @@ func TestUpdateProduct(t *testing.T) {
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name: "update product by invalid mongo id",
+			id:   "65bcc06cbc9",
+			body: map[string]interface{}{},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
@@ -168,7 +255,7 @@ func TestGetProduct(t *testing.T) {
 			},
 		},
 		{
-			name:     "get product by category & invalid id",
+			name:     "get product by invalid id",
 			category: map[string]interface{}{"category": "beverages"},
 			id:       "65bcc06cbc92379c5b6fe79b",
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
@@ -176,11 +263,19 @@ func TestGetProduct(t *testing.T) {
 			},
 		},
 		{
-			name:     "get product by invalid category & id",
+			name:     "get product by invalid category",
 			category: map[string]interface{}{"category": "beverage"},
 			id:       id,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:     "get product by invalid mongo id",
+			category: map[string]interface{}{"category": "beverage"},
+			id:       "65bcc06cbc9",
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
@@ -194,6 +289,8 @@ func TestGetProduct(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			log.Print("delete")
+			log.Print(id)
 			mux, ok := server.(*Server)
 			require.Equal(t, true, ok)
 
@@ -219,6 +316,13 @@ func TestDeleteProduct(t *testing.T) {
 		{
 			name: "delete product by invalid id",
 			id:   "65bcc06cbc92379c5b6fe79b",
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "delete product by invalid mongo id",
+			id:   "65bcc06cbc92379c5b6fe79bcd56",
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},

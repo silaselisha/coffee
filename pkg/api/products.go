@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -146,23 +145,37 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 
 	err = r.ParseMultipartForm(int64(32 << 20))
 	if err != nil {
-		log.Print(err)
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
 	//👨🏾‍💻uploading a thumbnail during product creation
-    // optionally upload thumbnail to AWS upon product creation
+	// upload thumbnail to AWS upon product creation
 	// thumbnail file should be an IMAGE in (png,svg,jpeg)
-	// image compression and resizing before saving the image 
+	// image compression and resizing before saving the image
+	thumbnail := make(chan string, 1)
+	errs := make(chan error, 1)
 	go func() {
-
+		err := util.ImageProcessor("thumbnail", r)
+		if err != nil {
+			errs <- err
+			return
+		}
+		close(thumbnail)
 	}()
 
 	var product store.Item
 	price, err := strconv.ParseFloat(r.FormValue("price"), 64)
 	if err != nil {
-		log.Print(err)
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+
+	select {
+	case filename := <-thumbnail:
+		product.Thumbnail = filename
+	case err := <-errs:
+		if err != nil {
+			return util.ResponseHandler(w, err, http.StatusBadRequest)
+		}
 	}
 
 	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")

@@ -3,15 +3,10 @@ package util
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -85,25 +80,11 @@ func CreateNewProduct() store.Item {
 	return product
 }
 
-func ImageProcessor(key string, r *http.Request) (fileName string, err error) {
-	file, _, err := r.FormFile(key)
+func ImageProcessor(key string, r *http.Request) (err error) {
+	_, _, err = r.FormFile(key)
 	if err != nil {
 		log.Print(err)
-		return "", err
+		return err
 	}
-	defer file.Close()
-
-	imageBytes, err := io.ReadAll(file)
-	if err != nil {
-		return "", err
-	}
-
-	mimeType := strings.Split(http.DetectContentType(imageBytes), "/")[1]
-	fileName = fmt.Sprintf("%s.%s", uuid.New().String(), mimeType)
-	err = os.WriteFile(fileName, imageBytes, 0666)
-	if err != nil {
-		return "", err
-	}
-
-	return
+	return nil
 }
