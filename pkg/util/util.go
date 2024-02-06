@@ -1,9 +1,12 @@
 package util
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -12,6 +15,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type Config struct {
@@ -80,11 +87,44 @@ func CreateNewProduct() store.Item {
 	return product
 }
 
-func ImageProcessor(key string, r *http.Request) (err error) {
-	_, _, err = r.FormFile(key)
+func S3ImageUploader(ctx context.Context, file multipart.File) (string, error) {
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		log.Panic(err)
+		return "", err
+	}
+
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.Region = "Global"
+	})
+	output, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String("watamu-coffee-shop"),
+		Key:    aws.String("images/thumbnails"),
+	})
 	if err != nil {
 		log.Print(err)
-		return err
+		return "", err
 	}
-	return nil
+
+	partNumber := int64(1)
+	buffer := make([]byte, 5 * 1024 * 1024)
+	for {
+		bytesReads, err := file.Read(buffer)
+		if err == io.EOF {
+			return "", err
+		}
+
+		_, err = client.UploadPart(ctx, &s3.UploadPartInput{
+			UploadId:   output.UploadId,
+			Bucket:     aws.String("watamu-coffee-shop"),
+			Key:        aws.String("images/thumbnails"),
+			PartNumber: aws.Int32(int32(partNumber)),
+			Body:       bytes.NewReader(buffer[:bytesReads]),
+		})
+		if err != nil {
+			log.Print(err)
+			return "", err
+		}
+		partNumber++
+	}
 }

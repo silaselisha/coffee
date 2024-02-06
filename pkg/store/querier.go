@@ -11,4 +11,5 @@ type Querier interface {
 	DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
+	CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 }

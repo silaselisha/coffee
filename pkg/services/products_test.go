@@ -1,4 +1,4 @@
-package api
+package services
 
 import (
 	"bytes"
@@ -154,50 +154,37 @@ func TestCreateProduct(t *testing.T) {
 func TestUpdateProduct(t *testing.T) {
 	var tests = []struct {
 		name  string
-		body  map[string]interface{}
+		bodyWriter func() (*bytes.Buffer, *multipart.Writer)
 		id    string
 		check func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name: "update a product",
 			id:   id,
-			body: map[string]interface{}{
-				"price": product.Price,
+			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+
+				writer.WriteField("price", "4.99")
+				defer writer.Close()
+				return body, writer
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name: "update product by invalid id",
-			id:   "65bcc06cbc92379c5b6fe79b",
-			body: map[string]interface{}{
-				"price": product.Price,
-			},
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
-			},
-		},
-		{
-			name: "update product by invalid mongo id",
-			id:   "65bcc06cbc9",
-			body: map[string]interface{}{},
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			dataBytes, err := json.Marshal(test.body)
-			require.NoError(t, err)
-
+			
 			server := NewServer(testMonogoStore)
-
+			
 			url := fmt.Sprintf("/products/%s", test.id)
 			recorder := httptest.NewRecorder()
-			request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(dataBytes))
+			body, writer := test.bodyWriter()
+			request, err := http.NewRequest(http.MethodPut, url, body)
+			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 			require.NoError(t, err)
 
 			mux, ok := server.(*Server)

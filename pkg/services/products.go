@@ -1,9 +1,7 @@
-package api
+package services
 
 import (
 	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,16 +16,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type UpdateProductParams struct {
-	Name        string   `bson:"name"`
-	Price       float64  `bson:"price"`
-	Images      []string `bson:"iamges"`
-	Summary     string   `bson:"summary"`
-	Category    string   `bson:"category"`
-	Thumbnail   string   `bson:"thumbnail"`
-	Description string   `bson:"Description"`
-	Ingridients []string `bson:"ingridients"`
-}
 
 func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := h.db.Collection(ctx, "coffeeshop", "products")
@@ -38,14 +26,20 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, "invalid product", http.StatusBadRequest)
 	}
 
-	dataBytes, err := io.ReadAll(r.Body)
+	err = r.ParseMultipartForm(int64(32 << 20))
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(dataBytes, &data); err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	price, _ := strconv.ParseFloat(r.FormValue("price"), 64)
+	ingridients := strings.Split(r.FormValue("ingridients"), ",")
+
+	data := store.ItemUpdateParams{ 
+		Name: r.FormValue("name"),
+		Price: price,
+		Description: r.FormValue("description"),
+		Summary: r.FormValue("summary"),
+		Ingridients: ingridients,
 	}
 
 	var updatedDocument store.Item
@@ -148,18 +142,20 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	//👨🏾‍💻uploading a thumbnail during product creation
-	// upload thumbnail to AWS upon product creation
-	// thumbnail file should be an IMAGE in (png,svg,jpeg)
-	// image compression and resizing before saving the image
 	thumbnail := make(chan string, 1)
 	errs := make(chan error, 1)
 	go func() {
-		err := util.ImageProcessor("thumbnail", r)
+		file, _, err := r.FormFile("thumbnail")
 		if err != nil {
 			errs <- err
 			return
 		}
+		data, err := util.S3ImageUploader(ctx, file)
+		if err != nil {
+			errs <- err
+			return
+		}
+		thumbnail <- data
 		close(thumbnail)
 	}()
 

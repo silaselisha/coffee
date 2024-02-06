@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/pkg/api"
+	"github.com/silaselisha/coffee-api/pkg/services"
 	"github.com/silaselisha/coffee-api/pkg/util"
 	"github.com/sirupsen/logrus"
 )
@@ -28,8 +28,8 @@ func main() {
 	}()
 
 	storage := store.NewMongoClient(client)
-	server := api.NewServer(storage)
-	router, ok := server.(*api.Server)
+	server := services.NewServer(storage)
+	router, ok := server.(*services.Server)
 	if !ok {
 		logrus.Error("internal server error")
 	}
