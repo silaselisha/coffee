@@ -16,6 +16,19 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+type itemParams struct {
+	id          primitive.ObjectID `bson:"_id"`
+	name        string             `bson:"name"`
+	price       float64            `bson:"price"`
+	description string             `bson:"description"`
+	summary     string             `bson:"summary"`
+	thumbnail   string             `bson:"thumbnail"`
+	category    string             `bson:"category"`
+	images      []string           `bson:"images"`
+	ingridients []string           `bson:"ingridients"`
+	created_at  time.Time          `bson:"created_at"`
+	updated_at  time.Time          `bson:"updated_at"`
+}
 
 func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := h.db.Collection(ctx, "coffeeshop", "products")
@@ -31,14 +44,28 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
+	thumbnail := make(chan string, 1)
+	errs := make(chan error, 1)
+	if file, _, err := r.FormFile("thumbnail"); err == nil {
+		go func() {
+			filename, err := util.S3ImageUploader(ctx, file)
+			if err != nil {
+				errs <- err
+				return
+			}
+			thumbnail <- filename
+		}()
+	}
+
 	price, _ := strconv.ParseFloat(r.FormValue("price"), 64)
 	ingridients := strings.Split(r.FormValue("ingridients"), ",")
 
-	data := store.ItemUpdateParams{ 
-		Name: r.FormValue("name"),
-		Price: price,
+	data := store.ItemUpdateParams{
+		Name:        r.FormValue("name"),
+		Price:       price,
+		Thumbnail:   <-thumbnail,
 		Description: r.FormValue("description"),
-		Summary: r.FormValue("summary"),
+		Summary:     r.FormValue("summary"),
 		Ingridients: ingridients,
 	}
 
@@ -54,7 +81,26 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	return nil
+	result := struct {
+		status string
+		data   itemParams
+	}{
+		status: "success",
+		data: itemParams{
+			id:          updatedDocument.Id,
+			name:        updatedDocument.Name,
+			price:       updatedDocument.Price,
+			summary:     updatedDocument.Summary,
+			category:    updatedDocument.Category,
+			images:      updatedDocument.Images,
+			thumbnail:   updatedDocument.Thumbnail,
+			ingridients: updatedDocument.Ingridients,
+			description: updatedDocument.Description,
+			created_at:  updatedDocument.CreatedAt,
+			updated_at:  updatedDocument.UpdatedAt,
+		},
+	}
+	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -66,9 +112,9 @@ func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter
 	}
 	defer cur.Close(ctx)
 
-	var result store.ItemList
+	var result []itemParams
 	for cur.Next(ctx) {
-		item := new(store.Item)
+		item := new(itemParams)
 		err := cur.Decode(&item)
 		if err != nil {
 			return util.ResponseHandler(w, err, http.StatusInternalServerError)
@@ -77,7 +123,16 @@ func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter
 		result = append(result, *item)
 	}
 
-	return util.ResponseHandler(w, result, http.StatusOK)
+	resp := struct {
+		status  string
+		results int32
+		data    []itemParams
+	}{
+		status:  "success",
+		results: int32(len(result)),
+		data:    result,
+	}
+	return util.ResponseHandler(w, resp, http.StatusOK)
 }
 
 func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -92,8 +147,8 @@ func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
 	cur := collection.FindOne(ctx, filter)
 
-	var result store.Item
-	err = cur.Decode(&result)
+	var item itemParams
+	err = cur.Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
@@ -101,6 +156,13 @@ func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
+	result := struct {
+		status string
+		data   itemParams
+	}{
+		status: "success",
+		data:   item,
+	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
@@ -159,7 +221,7 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		close(thumbnail)
 	}()
 
-	var product store.Item
+	var item store.Item
 	price, err := strconv.ParseFloat(r.FormValue("price"), 64)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
@@ -167,7 +229,7 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 
 	select {
 	case filename := <-thumbnail:
-		product.Thumbnail = filename
+		item.Thumbnail = filename
 	case err := <-errs:
 		if err != nil {
 			return util.ResponseHandler(w, err, http.StatusBadRequest)
@@ -176,22 +238,43 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 
 	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
 
-	product = store.Item{
-		Id:          primitive.NewObjectID(),
+	item = store.Item{
 		Name:        r.FormValue("name"),
 		Price:       price,
+		Ingridients: ingridients,
 		Summary:     r.FormValue("summary"),
 		Category:    r.FormValue("category"),
 		Description: r.FormValue("description"),
-		Ingridients: ingridients,
+		Images:      nil,
+		Thumbnail:   "",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
-	result, err := collection.InsertOne(ctx, product)
+	resultId, err := collection.InsertOne(ctx, item)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	return util.ResponseHandler(w, result.InsertedID, http.StatusCreated)
+	result := struct {
+		status string
+		data   itemParams
+	}{
+		status: "success",
+		data: itemParams{
+			id:          resultId.InsertedID.(primitive.ObjectID),
+			name:        item.Name,
+			price:       item.Price,
+			summary:     item.Summary,
+			category:    item.Category,
+			images:      item.Images,
+			thumbnail:   item.Thumbnail,
+			ingridients: item.Ingridients,
+			description: item.Description,
+			created_at:  item.CreatedAt,
+			updated_at:  item.UpdatedAt,
+		},
+	}
+
+	return util.ResponseHandler(w, result, http.StatusCreated)
 }

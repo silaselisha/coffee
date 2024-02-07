@@ -63,9 +63,9 @@ func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
 	return client, nil
 }
 
-func ResponseHandler(w http.ResponseWriter, message any, status int) error {
+func ResponseHandler(w http.ResponseWriter, message any, statusCode int) error {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(statusCode)
 
 	return json.NewEncoder(w).Encode(message)
 }
@@ -107,7 +107,7 @@ func S3ImageUploader(ctx context.Context, file multipart.File) (string, error) {
 	}
 
 	partNumber := int64(1)
-	buffer := make([]byte, 5 * 1024 * 1024)
+	buffer := make([]byte, 5*1024*1024)
 	for {
 		bytesReads, err := file.Read(buffer)
 		if err == io.EOF {

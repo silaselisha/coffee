@@ -36,6 +36,7 @@ type User struct {
 	Id          primitive.ObjectID `bson:"_id"`
 	Avatar      string             `bson:"avatar"`
 	UserName    string             `bson:"username"`
+	Role        string             `bson:"role"`
 	Email       string             `bson:"email"`
 	PhoneNumber int                `bson:"phoneNumber"`
 	Verified    bool               `bson:"verified"`
@@ -44,7 +45,11 @@ type User struct {
 	UpdatedAt   time.Time          `bson:"updated_at"`
 }
 
-type Reservation struct{}
+type Reservation struct {
+	Id              primitive.ObjectID `bson:"_id"`
+	CreatedAt       time.Time          `bson:"created_at"`
+	UpdatedAt       time.Time          `bson:"updated_at"`
+}
 type Order struct{}
 type CoffeeDateTable struct{}
 type Invoice struct{}

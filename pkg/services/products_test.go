@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,10 +56,10 @@ func TestCreateProduct(t *testing.T) {
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				dataBytes, err := io.ReadAll(recorder.Body)
 				require.Equal(t, nil, err)
-				var productId string
-				err = json.Unmarshal(dataBytes, &productId)
+				var product store.Item
+				err = json.Unmarshal(dataBytes, &product)
 				require.Equal(t, nil, err)
-				id = productId
+				id = product.Id.String()
 				log.Println(id)
 				require.NotEmpty(t, id)
 				require.Equal(t, http.StatusCreated, recorder.Code)
