@@ -3,7 +3,6 @@ module github.com/silaselisha/coffee-api
 go 1.21.1
 
 require (
-	github.com/aws/aws-sdk-go v1.50.13
 	github.com/aws/aws-sdk-go-v2/config v1.26.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.48.1
 	github.com/go-playground/validator/v10 v10.17.0
