@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/util"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Server struct {
@@ -15,13 +16,16 @@ type Server struct {
 	vd     *validator.Validate
 }
 
-func NewServer(store store.Mongo) store.Querier {
-	server := &Server{db: store}
-	router := mux.NewRouter()
-
+func NewServer(client *mongo.Client) store.Querier {
+	server := &Server{}
+	
+	store := store.NewMongoClient(client)
+	server.db = store
+	
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	server.vd = validate
-
+	
+	router := mux.NewRouter()
 	getRouter := router.Methods(http.MethodGet).Subrouter()
 	postRouter := router.Methods(http.MethodPost).Subrouter()
 	deleteRouter := router.Methods(http.MethodDelete).Subrouter()

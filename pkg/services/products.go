@@ -16,22 +16,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type itemParams struct {
-	id          primitive.ObjectID `bson:"_id"`
-	name        string             `bson:"name"`
-	price       float64            `bson:"price"`
-	description string             `bson:"description"`
-	summary     string             `bson:"summary"`
-	thumbnail   string             `bson:"thumbnail"`
-	category    string             `bson:"category"`
-	images      []string           `bson:"images"`
-	ingridients []string           `bson:"ingridients"`
-	created_at  time.Time          `bson:"created_at"`
-	updated_at  time.Time          `bson:"updated_at"`
-}
-
-func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -44,16 +30,9 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	thumbnail := make(chan string, 1)
-	errs := make(chan error, 1)
-	if file, _, err := r.FormFile("thumbnail"); err == nil {
+	if _, _, err := r.FormFile("thumbnail"); err == nil {
 		go func() {
-			filename, err := util.S3ImageUploader(ctx, file)
-			if err != nil {
-				errs <- err
-				return
-			}
-			thumbnail <- filename
+			util.S3ImageUploader(ctx, r)
 		}()
 	}
 
@@ -63,7 +42,6 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 	data := store.ItemUpdateParams{
 		Name:        r.FormValue("name"),
 		Price:       price,
-		Thumbnail:   <-thumbnail,
 		Description: r.FormValue("description"),
 		Summary:     r.FormValue("summary"),
 		Ingridients: ingridients,
@@ -82,29 +60,17 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	result := struct {
-		status string
-		data   itemParams
+		Status string
+		Data   store.Item
 	}{
-		status: "success",
-		data: itemParams{
-			id:          updatedDocument.Id,
-			name:        updatedDocument.Name,
-			price:       updatedDocument.Price,
-			summary:     updatedDocument.Summary,
-			category:    updatedDocument.Category,
-			images:      updatedDocument.Images,
-			thumbnail:   updatedDocument.Thumbnail,
-			ingridients: updatedDocument.Ingridients,
-			description: updatedDocument.Description,
-			created_at:  updatedDocument.CreatedAt,
-			updated_at:  updatedDocument.UpdatedAt,
-		},
+		Status: "success",
+		Data:   updatedDocument,
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
@@ -112,9 +78,9 @@ func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter
 	}
 	defer cur.Close(ctx)
 
-	var result []itemParams
+	var result store.ItemList
 	for cur.Next(ctx) {
-		item := new(itemParams)
+		item := new(store.Item)
 		err := cur.Decode(&item)
 		if err != nil {
 			return util.ResponseHandler(w, err, http.StatusInternalServerError)
@@ -124,19 +90,19 @@ func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	resp := struct {
-		status  string
-		results int32
-		data    []itemParams
+		Status  string
+		Results int32
+		Data    store.ItemList
 	}{
-		status:  "success",
-		results: int32(len(result)),
-		data:    result,
+		Status:  "success",
+		Results: int32(len(result)),
+		Data:    result,
 	}
 	return util.ResponseHandler(w, resp, http.StatusOK)
 }
 
-func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -147,7 +113,7 @@ func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
 	cur := collection.FindOne(ctx, filter)
 
-	var item itemParams
+	var item store.Item
 	err = cur.Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -157,17 +123,17 @@ func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	result := struct {
-		status string
-		data   itemParams
+		Status string
+		Data   store.Item
 	}{
-		status: "success",
-		data:   item,
+		Status: "success",
+		Data:   item,
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (h *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -188,8 +154,8 @@ func (h *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 
-func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "name", Value: 1}},
@@ -204,21 +170,10 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	thumbnail := make(chan string, 1)
-	errs := make(chan error, 1)
+	// thumbnail := make(chan string, 1)
+	// errs := make(chan error, 1)
 	go func() {
-		file, _, err := r.FormFile("thumbnail")
-		if err != nil {
-			errs <- err
-			return
-		}
-		data, err := util.S3ImageUploader(ctx, file)
-		if err != nil {
-			errs <- err
-			return
-		}
-		thumbnail <- data
-		close(thumbnail)
+		util.S3ImageUploader(ctx, r)
 	}()
 
 	var item store.Item
@@ -227,53 +182,41 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	select {
-	case filename := <-thumbnail:
-		item.Thumbnail = filename
-	case err := <-errs:
-		if err != nil {
-			return util.ResponseHandler(w, err, http.StatusBadRequest)
-		}
-	}
+	// select {
+	// case filename := <-thumbnail:
+	// 	item.Thumbnail = filename
+	// case err := <-errs:
+	// 	if err != nil {
+	// 		log.Print(err)
+	// 		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	// 	}
+	// }
 
 	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
 
 	item = store.Item{
+		Id:          primitive.NewObjectID(),
 		Name:        r.FormValue("name"),
 		Price:       price,
 		Ingridients: ingridients,
 		Summary:     r.FormValue("summary"),
 		Category:    r.FormValue("category"),
 		Description: r.FormValue("description"),
-		Images:      nil,
-		Thumbnail:   "",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
-	resultId, err := collection.InsertOne(ctx, item)
+	_, err = collection.InsertOne(ctx, item)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
 	result := struct {
-		status string
-		data   itemParams
+		Status string
+		Data   store.Item
 	}{
-		status: "success",
-		data: itemParams{
-			id:          resultId.InsertedID.(primitive.ObjectID),
-			name:        item.Name,
-			price:       item.Price,
-			summary:     item.Summary,
-			category:    item.Category,
-			images:      item.Images,
-			thumbnail:   item.Thumbnail,
-			ingridients: item.Ingridients,
-			description: item.Description,
-			created_at:  item.CreatedAt,
-			updated_at:  item.UpdatedAt,
-		},
+		Status: "success",
+		Data:   item,
 	}
 
 	return util.ResponseHandler(w, result, http.StatusCreated)

@@ -118,6 +118,15 @@ func TestCreateProduct(t *testing.T) {
 			},
 		},
 		{
+			name: "create a product without form data",
+			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
+				return nil, nil
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
 			name: "create an invalid product",
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
@@ -135,7 +144,7 @@ func TestCreateProduct(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			server := NewServer(testMonogoStore)
+			server := NewServer(mongoClient)
 
 			url := "/products"
 			recorder := httptest.NewRecorder()
@@ -179,7 +188,7 @@ func TestUpdateProduct(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			
-			server := NewServer(testMonogoStore)
+			server := NewServer(mongoClient)
 			
 			url := fmt.Sprintf("/products/%s", test.id)
 			recorder := httptest.NewRecorder()
@@ -212,7 +221,7 @@ func TestGetAllProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := NewServer(testMonogoStore)
+			server := NewServer(mongoClient)
 
 			url := "/products"
 			recorder := httptest.NewRecorder()
@@ -270,7 +279,7 @@ func TestGetProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := NewServer(testMonogoStore)
+			server := NewServer(mongoClient)
 
 			url := fmt.Sprintf("/products/%s/%s", test.category["category"], test.id)
 			recorder := httptest.NewRecorder()
@@ -319,7 +328,7 @@ func TestDeleteProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := NewServer(testMonogoStore)
+			server := NewServer(mongoClient)
 
 			url := fmt.Sprintf("/products/%s", test.id)
 			recorder := httptest.NewRecorder()

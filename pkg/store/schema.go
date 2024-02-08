@@ -16,6 +16,7 @@ type Item struct {
 	Thumbnail   string             `bson:"thumbnail"`
 	Description string             `bson:"description" validate:"required"`
 	Ingridients []string           `bson:"ingridients" validate:"required"`
+	Ratings     float64            `bson:"ratings"`
 	CreatedAt   time.Time          `bson:"created_at"`
 	UpdatedAt   time.Time          `bson:"updated_at"`
 }
@@ -46,9 +47,9 @@ type User struct {
 }
 
 type Reservation struct {
-	Id              primitive.ObjectID `bson:"_id"`
-	CreatedAt       time.Time          `bson:"created_at"`
-	UpdatedAt       time.Time          `bson:"updated_at"`
+	Id        primitive.ObjectID `bson:"_id"`
+	CreatedAt time.Time          `bson:"created_at"`
+	UpdatedAt time.Time          `bson:"updated_at"`
 }
 type Order struct{}
 type CoffeeDateTable struct{}
