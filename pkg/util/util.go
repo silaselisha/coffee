@@ -3,20 +3,19 @@ package util
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type Config struct {
@@ -61,9 +60,9 @@ func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
 	return client, nil
 }
 
-func ResponseHandler(w http.ResponseWriter, message any, status int) error {
+func ResponseHandler(w http.ResponseWriter, message any, statusCode int) error {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(statusCode)
 
 	return json.NewEncoder(w).Encode(message)
 }
@@ -85,25 +84,27 @@ func CreateNewProduct() store.Item {
 	return product
 }
 
-func ImageProcessor(key string, r *http.Request) (fileName string, err error) {
-	file, _, err := r.FormFile(key)
+func S3ImageUploader(ctx context.Context, r *http.Request) {
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		log.Print(err)
-		return "", err
+		return
+	}
+	s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.Region = "us-east-1"
+	})
+
+	file, _, err := r.FormFile("thumbnail")
+	if err != nil {
+		log.Print(err)
+		return
 	}
 	defer file.Close()
 
-	imageBytes, err := io.ReadAll(file)
+	dataBytes, err := io.ReadAll(file)
 	if err != nil {
-		return "", err
+		log.Print(err)
+		return
 	}
-
-	mimeType := strings.Split(http.DetectContentType(imageBytes), "/")[1]
-	fileName = fmt.Sprintf("%s.%s", uuid.New().String(), mimeType)
-	err = os.WriteFile(fileName, imageBytes, 0666)
-	if err != nil {
-		return "", err
-	}
-
-	return
+	log.Print(dataBytes)
 }

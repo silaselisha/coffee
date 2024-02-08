@@ -1,10 +1,7 @@
-package api
+package services
 
 import (
 	"context"
-	"encoding/json"
-	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,19 +16,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type UpdateProductParams struct {
-	Name        string   `bson:"name"`
-	Price       float64  `bson:"price"`
-	Images      []string `bson:"iamges"`
-	Summary     string   `bson:"summary"`
-	Category    string   `bson:"category"`
-	Thumbnail   string   `bson:"thumbnail"`
-	Description string   `bson:"Description"`
-	Ingridients []string `bson:"ingridients"`
-}
-
-func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -39,14 +25,26 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, "invalid product", http.StatusBadRequest)
 	}
 
-	dataBytes, err := io.ReadAll(r.Body)
+	err = r.ParseMultipartForm(int64(32 << 20))
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(dataBytes, &data); err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	if _, _, err := r.FormFile("thumbnail"); err == nil {
+		go func() {
+			util.S3ImageUploader(ctx, r)
+		}()
+	}
+
+	price, _ := strconv.ParseFloat(r.FormValue("price"), 64)
+	ingridients := strings.Split(r.FormValue("ingridients"), ",")
+
+	data := store.ItemUpdateParams{
+		Name:        r.FormValue("name"),
+		Price:       price,
+		Description: r.FormValue("description"),
+		Summary:     r.FormValue("summary"),
+		Ingridients: ingridients,
 	}
 
 	var updatedDocument store.Item
@@ -61,11 +59,18 @@ func (h *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	return nil
+	result := struct {
+		Status string
+		Data   store.Item
+	}{
+		Status: "success",
+		Data:   updatedDocument,
+	}
+	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
@@ -84,11 +89,20 @@ func (h *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter
 		result = append(result, *item)
 	}
 
-	return util.ResponseHandler(w, result, http.StatusOK)
+	resp := struct {
+		Status  string
+		Results int32
+		Data    store.ItemList
+	}{
+		Status:  "success",
+		Results: int32(len(result)),
+		Data:    result,
+	}
+	return util.ResponseHandler(w, resp, http.StatusOK)
 }
 
-func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -99,8 +113,8 @@ func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
 	cur := collection.FindOne(ctx, filter)
 
-	var result store.Item
-	err = cur.Decode(&result)
+	var item store.Item
+	err = cur.Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
@@ -108,11 +122,18 @@ func (h *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
+	result := struct {
+		Status string
+		Data   store.Item
+	}{
+		Status: "success",
+		Data:   item,
+	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (h *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -133,8 +154,8 @@ func (h *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 
-func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := h.db.Collection(ctx, "coffeeshop", "products")
+func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "name", Value: 1}},
@@ -146,35 +167,57 @@ func (h *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 
 	err = r.ParseMultipartForm(int64(32 << 20))
 	if err != nil {
-		log.Print(err)
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	var product store.Item
+	// thumbnail := make(chan string, 1)
+	// errs := make(chan error, 1)
+	go func() {
+		util.S3ImageUploader(ctx, r)
+	}()
+
+	var item store.Item
 	price, err := strconv.ParseFloat(r.FormValue("price"), 64)
 	if err != nil {
-		log.Print(err)
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
+
+	// select {
+	// case filename := <-thumbnail:
+	// 	item.Thumbnail = filename
+	// case err := <-errs:
+	// 	if err != nil {
+	// 		log.Print(err)
+	// 		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	// 	}
+	// }
 
 	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
 
-	product = store.Item{
+	item = store.Item{
 		Id:          primitive.NewObjectID(),
 		Name:        r.FormValue("name"),
 		Price:       price,
+		Ingridients: ingridients,
 		Summary:     r.FormValue("summary"),
 		Category:    r.FormValue("category"),
 		Description: r.FormValue("description"),
-		Ingridients: ingridients,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
-	result, err := collection.InsertOne(ctx, product)
+	_, err = collection.InsertOne(ctx, item)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	return util.ResponseHandler(w, result.InsertedID, http.StatusCreated)
+	result := struct {
+		Status string
+		Data   store.Item
+	}{
+		Status: "success",
+		Data:   item,
+	}
+
+	return util.ResponseHandler(w, result, http.StatusCreated)
 }
