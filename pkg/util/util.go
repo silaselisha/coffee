@@ -2,26 +2,29 @@ package util
 
 import (
 	"context"
+	"crypto"
 	"encoding/json"
+	"fmt"
 	"io"
-	"log"
+	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type Config struct {
-	DBPassword  string `mapstructure:"DB_PASSWORD"`
-	DBUri       string `mapstructure:"DB_URI"`
-	ServerAddrs string `mapstructure:"SERVER_ADDRESS"`
+	DBPassword      string `mapstructure:"DB_PASSWORD"`
+	DBUri           string `mapstructure:"DB_URI"`
+	ServerAddrs     string `mapstructure:"SERVER_ADDRESS"`
+	SecretAccessKey string `mapstructure:"SECRET_ACCESS_KEY"`
+	JwtExpiresAt    string `mapstructure:"JWT_EXPIRES_AT"`
 }
 
 func LoadEnvs(path string) (config *Config, err error) {
@@ -84,27 +87,36 @@ func CreateNewProduct() store.Item {
 	return product
 }
 
-func S3ImageUploader(ctx context.Context, r *http.Request) {
-	cfg, err := config.LoadDefaultConfig(ctx)
+func ImageThumbnailProcessor(ctx context.Context, file multipart.File) ([]byte, string, error) {
+	imageBytes, err := io.ReadAll(file)
 	if err != nil {
-		log.Print(err)
-		return
-	}
-	s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.Region = "us-east-1"
-	})
-
-	file, _, err := r.FormFile("thumbnail")
-	if err != nil {
-		log.Print(err)
-		return
+		if err == io.EOF {
+			return nil, "", fmt.Errorf("end of file error: %w", err)
+		}
+		return nil, "", err
 	}
 	defer file.Close()
 
-	dataBytes, err := io.ReadAll(file)
-	if err != nil {
-		log.Print(err)
-		return
+	contentType := strings.Split(http.DetectContentType(imageBytes), "/")[0]
+	mimeType := strings.Split(http.DetectContentType(imageBytes), "/")[1]
+	if contentType != "image" {
+		fmt.Println(contentType)
+		return nil, "", fmt.Errorf("wrong file upload, only images required")
 	}
-	log.Print(dataBytes)
+
+	imageName := fmt.Sprintf("%s.%s", uuid.New(), mimeType)
+	return imageBytes, imageName, nil
+}
+
+func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string) error {
+	return nil
+}
+
+func PasswordEncryption(password []byte) string {
+	return fmt.Sprintf("%x", crypto.SHA256.New().Sum(password))
+}
+
+func ComparePasswordEncryption(password, comparePassword string) bool {
+	hash := fmt.Sprintf("%x", crypto.SHA256.New().Sum([]byte(comparePassword)))
+	return hash == password
 }
