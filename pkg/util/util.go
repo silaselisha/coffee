@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/silaselisha/coffee-api/pkg/store"
@@ -76,15 +75,21 @@ func CreateNewProduct() store.Item {
 		Price:       4.50,
 		Description: "A cafe latte is a popular coffee drink that consists of espresso and steamed milk, topped with a thin layer of foam. It is perfect for those who enjoy a smooth and creamy coffee with a balanced flavor. At our coffee shop, we use high-quality beans and fresh milk to make our cafe lattes, and we can customize them with different syrups, spices, or whipped cream. ☕",
 		Summary:     "A cafe latte is a coffee drink made with espresso and steamed milk, with a thin layer of foam on top. It has a smooth and creamy taste, and can be customized with different flavors. Our coffee shop offers high-quality and fresh cafe lattes for any occasion.🍵",
-		Images:      []string{"caffelatte.jpeg", "lattecafe.jpeg"},
-		Thumbnail:   "thumbnail.jpeg",
 		Category:    "beverages",
 		Ingridients: []string{"Espresso", "Milk", "Falvored syrup"},
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
 	}
 
 	return product
+}
+
+func CreateNewUser() store.User {
+	user := store.User{
+		UserName:    "al3xa",
+		Email:       "al3xa@aws.ac.us",
+		Password:    "Abstarct&87",
+		PhoneNumber: "+1(571)360-6677",
+	}
+	return user
 }
 
 func ImageThumbnailProcessor(ctx context.Context, file multipart.File) ([]byte, string, error) {
