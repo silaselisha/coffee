@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,12 +29,6 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 	err = r.ParseMultipartForm(int64(32 << 20))
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	if _, _, err := r.FormFile("thumbnail"); err == nil {
-		go func() {
-			util.S3ImageUploader(ctx, r)
-		}()
 	}
 
 	price, _ := strconv.ParseFloat(r.FormValue("price"), 64)
@@ -119,7 +114,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
 		}
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
 	result := struct {
@@ -138,7 +133,7 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
 	filter := bson.D{{Key: "_id", Value: id}}
@@ -170,10 +165,24 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	// thumbnail := make(chan string, 1)
-	// errs := make(chan error, 1)
+	thumbnailName := make(chan string)
+	errs := make(chan error)
 	go func() {
-		util.S3ImageUploader(ctx, r)
+		file, _, err := r.FormFile("thumbnail")
+		if err != nil {
+			errs <- err
+			return
+		}
+
+		_, fileName, err := util.ImageThumbnailProcessor(ctx, file)
+		if err != nil {
+			errs <- err
+			return
+		}
+		
+		thumbnailName <- fileName
+		close(thumbnailName)
+		defer file.Close()
 	}()
 
 	var item store.Item
@@ -182,15 +191,19 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	// select {
-	// case filename := <-thumbnail:
-	// 	item.Thumbnail = filename
-	// case err := <-errs:
-	// 	if err != nil {
-	// 		log.Print(err)
-	// 		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	// 	}
-	// }
+	select {
+	case err := <-errs:
+		if err != nil {
+			fmt.Println(err.Error())
+			return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+		}
+
+	case fileName, ok := <-thumbnailName:
+		if !ok {
+			break
+		}
+		item.Thumbnail = fileName
+	}
 
 	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
 

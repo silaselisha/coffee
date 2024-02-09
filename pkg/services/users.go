@@ -10,16 +10,17 @@ package services
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/silaselisha/coffee-api/pkg/store"
+	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/pkg/util"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -44,7 +45,8 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	hashedPassword := fmt.Sprintf("%x", sha256.Sum256([]byte(data.Password)))
+	hashedPassword := util.PasswordEncryption([]byte(data.Password))
+	data.Id = primitive.NewObjectID()
 	data.Role = "user"
 	data.Avatar = "default.jpeg"
 	data.Password = hashedPassword
@@ -54,5 +56,27 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
-	return util.ResponseHandler(w, "user", http.StatusCreated)
+
+	jwtoken := token.NewToken(s.envs.SecretAccessKey)
+	minutes, err := strconv.Atoi(s.envs.JwtExpiresAt)
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	duration := time.Minute * time.Duration(minutes)
+	token, err := jwtoken.CreateToken(ctx, data.Email, duration)
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	result := struct {
+		Status string
+		Token  string
+		Data   store.User
+	}{
+		Status: "success",
+		Token:  token,
+		Data:   data,
+	}
+	return util.ResponseHandler(w, result, http.StatusCreated)
 }
