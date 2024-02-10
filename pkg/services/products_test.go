@@ -8,7 +8,6 @@ import (
 	"image/color"
 	"image/png"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -59,9 +58,9 @@ func TestCreateProduct(t *testing.T) {
 				var product store.Item
 				err = json.Unmarshal(dataBytes, &product)
 				require.Equal(t, nil, err)
-				id = product.Id.String()
-				log.Println(id)
-				require.NotEmpty(t, id)
+				productId = product.Id.String()
+
+				require.NotEmpty(t, productId)
 				require.Equal(t, http.StatusCreated, recorder.Code)
 			},
 		},
@@ -163,14 +162,14 @@ func TestCreateProduct(t *testing.T) {
 }
 func TestUpdateProduct(t *testing.T) {
 	var tests = []struct {
-		name  string
+		name       string
 		bodyWriter func() (*bytes.Buffer, *multipart.Writer)
-		id    string
-		check func(t *testing.T, recorder *httptest.ResponseRecorder)
+		id         string
+		check      func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name: "update a product",
-			id:   id,
+			id:   productId,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -187,9 +186,9 @@ func TestUpdateProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			
+
 			server := NewServer(mongoClient)
-			
+
 			url := fmt.Sprintf("/products/%s", test.id)
 			recorder := httptest.NewRecorder()
 			body, writer := test.bodyWriter()
@@ -246,7 +245,7 @@ func TestGetProduct(t *testing.T) {
 		{
 			name:     "get product by category & id",
 			category: map[string]interface{}{"category": "beverages"},
-			id:       id,
+			id:       productId,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
@@ -262,7 +261,7 @@ func TestGetProduct(t *testing.T) {
 		{
 			name:     "get product by invalid category",
 			category: map[string]interface{}{"category": "beverage"},
-			id:       id,
+			id:       productId,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
@@ -286,8 +285,6 @@ func TestGetProduct(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			log.Print("delete")
-			log.Print(id)
 			mux, ok := server.(*Server)
 			require.Equal(t, true, ok)
 
@@ -305,7 +302,7 @@ func TestDeleteProduct(t *testing.T) {
 	}{
 		{
 			name: "delete product by id",
-			id:   id,
+			id:   productId,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNoContent, recorder.Code)
 			},

@@ -3,15 +3,17 @@ package services
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/util"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreateUser(t *testing.T) {
+func TestCreateUserSignup(t *testing.T) {
 	user := util.CreateNewUser()
 	tests := []struct {
 		name  string
@@ -27,6 +29,19 @@ func TestCreateUser(t *testing.T) {
 				"phoneNumber": user.PhoneNumber,
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				var result struct {
+					Status string
+					Token  string
+					Data   store.User
+				}
+				body, err := io.ReadAll(recorder.Body)
+				require.NoError(t, err)
+				require.NotEmpty(t, body)
+
+				err = json.Unmarshal(body, &result)
+				require.NoError(t, err)
+				testToken = result.Token
+				userId = result.Data.Id.Hex()
 				require.Equal(t, http.StatusCreated, recorder.Code)
 			},
 		},

@@ -42,7 +42,7 @@ func NewServer(client *mongo.Client) store.Querier {
 	postUserRouter := router.Methods(http.MethodPost).Subrouter()
 
 	postProductRouter.HandleFunc("/products", util.HandleFuncDecorator(server.CreateProductHandler))
-	getProductRouter.HandleFunc("/products", util.HandleFuncDecorator(server.GetAllProductHandler))
+	getProductRouter.HandleFunc("/products", util.HandleFuncDecorator(server.GetAllProductsHandler))
 	getProductRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(server.GetProductByIdHandler))
 	deleteProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(server.DeleteProductByIdHandler))
 	updateProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(server.UpdateProductHandler))

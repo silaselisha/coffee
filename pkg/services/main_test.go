@@ -14,7 +14,9 @@ import (
 
 var mongoClient *mongo.Client
 var product store.Item
-var id string
+var productId string
+var userId string
+var testToken string
 
 func TestMain(m *testing.M) {
 	fmt.Println("RUNNING")

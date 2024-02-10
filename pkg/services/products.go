@@ -64,7 +64,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (s *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	cur, err := collection.Find(ctx, bson.D{})
@@ -106,10 +106,10 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
-	cur := collection.FindOne(ctx, filter)
+	result := collection.FindOne(ctx, filter)
 
 	var item store.Item
-	err = cur.Decode(&item)
+	err = result.Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
@@ -117,21 +117,21 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	result := struct {
+	res := struct {
 		Status string
 		Data   store.Item
 	}{
 		Status: "success",
 		Data:   item,
 	}
-	return util.ResponseHandler(w, result, http.StatusOK)
+	return util.ResponseHandler(w, res, http.StatusOK)
 }
 
 func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
-	vars := mux.Vars(r)
-	id, err := primitive.ObjectIDFromHex(vars["id"])
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}

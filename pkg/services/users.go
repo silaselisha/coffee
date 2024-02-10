@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/pkg/util"
@@ -79,4 +80,90 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		Data:   data,
 	}
 	return util.ResponseHandler(w, result, http.StatusCreated)
+}
+
+func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+
+	var users store.UserList
+	cur, err := collection.Find(ctx, bson.D{{}})
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
+		var user store.User
+		err := cur.Decode(&user)
+		if err != nil {
+			return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		}
+		users = append(users, user)
+	}
+
+	result := struct {
+		Status string
+		Result int32
+		Data   store.UserList
+	}{
+		Status: "success",
+		Result: int32(len(users)),
+		Data:   users,
+	}
+	return util.ResponseHandler(w, result, http.StatusOK)
+}
+
+func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	result := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
+	var user store.User
+	err = result.Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
+		}
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	res := struct {
+		Status string
+		Data   store.User
+	}{
+		Status: "sucess",
+		Data:   user,
+	}
+	return util.ResponseHandler(w, res, http.StatusOK)
+}
+
+func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	// update user info except password
+	// loggedin users can only update their accounts
+	return util.ResponseHandler(w, "", http.StatusOK)
+}
+
+func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	var deletedDocument bson.M
+	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&deletedDocument)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, "invalid operation on data", http.StatusBadRequest)
+		}
+		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
+	}
+	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
