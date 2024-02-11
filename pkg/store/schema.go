@@ -39,7 +39,7 @@ type User struct {
 	UserName    string             `bson:"username"`
 	Role        string             `bson:"role"`
 	Email       string             `bson:"email"`
-	PhoneNumber string               `bson:"phoneNumber"`
+	PhoneNumber string             `bson:"phoneNumber"`
 	Verified    bool               `bson:"verified"`
 	Password    string             `bson:"password"`
 	CreatedAt   time.Time          `bson:"created_at"`

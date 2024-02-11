@@ -6,12 +6,13 @@
 // account update info functionality [Avatar, PhoneNumber, Password]
 // deactivate account and set for permanet deletion 30day without login
 // delete account with all it's associated data
-package services
+package handler
 
 import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -143,9 +144,65 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	// update user info except password
-	// loggedin users can only update their accounts
-	return util.ResponseHandler(w, "", http.StatusOK)
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+
+	err = r.ParseMultipartForm(int64(32 << 20))
+	if err != nil {
+		log.Print(err.Error())
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+
+	avatar := make(chan string)
+	go func() {
+		if file, header, err := r.FormFile("avatar"); err == nil {
+			log.Print(header.Filename)
+			io.ReadAll(file)
+		}
+	}()
+
+	
+	fields := []string{"username", "phoneNumber"}
+	data := bson.M{}
+	for _, field := range fields {
+		value := r.FormValue(field)
+		if value != "" {
+			data[field] = value
+		}
+	}
+
+	avatarName := <-avatar
+	if avatarName != "" {
+		data["avatat"] = avatarName
+	}
+
+	data["updated_at"] = time.Now()
+	log.Print(data)
+	filter := bson.D{{Key: "_id", Value: id}}
+	update := bson.M{"$set": data}
+
+	var updatedDocument store.User
+	err = collection.FindOneAndUpdate(ctx, filter, update).Decode(&updatedDocument)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Print(err.Error())
+			return util.ResponseHandler(w, err, http.StatusBadRequest)
+		}
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	result := struct {
+		Status string
+		Data   store.User
+	}{
+		Status: "success",
+	}
+	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {

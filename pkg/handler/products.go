@@ -1,4 +1,4 @@
-package services
+package handler
 
 import (
 	"context"
@@ -179,7 +179,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			errs <- err
 			return
 		}
-		
+
 		thumbnailName <- fileName
 		close(thumbnailName)
 		defer file.Close()

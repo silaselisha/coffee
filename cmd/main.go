@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/silaselisha/coffee-api/pkg/services"
+	"github.com/silaselisha/coffee-api/pkg/handler"
 	"github.com/silaselisha/coffee-api/pkg/util"
 	"github.com/sirupsen/logrus"
 )
@@ -26,8 +26,8 @@ func main() {
 		}
 	}()
 
-	server := services.NewServer(client)
-	router, ok := server.(*services.Server)
+	server := handler.NewServer(client)
+	router, ok := server.(*handler.Server)
 	if !ok {
 		logrus.Error("internal server error")
 	}
