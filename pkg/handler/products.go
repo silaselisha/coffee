@@ -31,15 +31,26 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	price, _ := strconv.ParseFloat(r.FormValue("price"), 64)
-	ingridients := strings.Split(r.FormValue("ingridients"), ",")
+	fields := []string{"name", "price", "ingridients", "description", "summary"}
+	data := bson.M{}
+	for _, field := range fields {
+		value := r.FormValue(field)
+		if value != "" {
+			data[field] = r.FormValue(field)
+		}
+	}
 
-	data := store.ItemUpdateParams{
-		Name:        r.FormValue("name"),
-		Price:       price,
-		Description: r.FormValue("description"),
-		Summary:     r.FormValue("summary"),
-		Ingridients: ingridients,
+	if data["price"] != "" {
+		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
+		if err != nil {
+			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+		}
+		data["price"] = price
+	}
+
+	if data["ingridients"] != "" {
+		var result []string = strings.Split(r.FormValue("ingridients"), ",")
+		data["ingridients"] = result
 	}
 
 	var updatedDocument store.Item
@@ -233,4 +244,17 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	return util.ResponseHandler(w, result, http.StatusCreated)
+}
+
+func productRoutes(gmux *mux.Router, srv *Server) {
+	getProductRouter := gmux.Methods(http.MethodGet).Subrouter()
+	postProductRouter := gmux.Methods(http.MethodPost).Subrouter()
+	deleteProductRouter := gmux.Methods(http.MethodDelete).Subrouter()
+	updateProductRouter := gmux.Methods(http.MethodPut).Subrouter()
+
+	postProductRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.CreateProductHandler))
+	getProductRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.GetAllProductsHandler))
+	getProductRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(srv.GetProductByIdHandler))
+	deleteProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(srv.DeleteProductByIdHandler))
+	updateProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(srv.UpdateProductHandler))
 }

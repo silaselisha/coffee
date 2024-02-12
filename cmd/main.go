@@ -31,7 +31,6 @@ func main() {
 	if !ok {
 		logrus.Error("internal server error")
 	}
-
 	err = http.ListenAndServe(config.ServerAddrs, router.Router)
 	if err != nil {
 		logrus.Fatal(err)

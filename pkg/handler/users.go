@@ -11,12 +11,15 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
@@ -158,15 +161,6 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	avatar := make(chan string)
-	go func() {
-		if file, header, err := r.FormFile("avatar"); err == nil {
-			log.Print(header.Filename)
-			io.ReadAll(file)
-		}
-	}()
-
-	
 	fields := []string{"username", "phoneNumber"}
 	data := bson.M{}
 	for _, field := range fields {
@@ -176,9 +170,44 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		}
 	}
 
-	avatarName := <-avatar
-	if avatarName != "" {
-		data["avatat"] = avatarName
+	if file, _, err := r.FormFile("avatar"); err == nil {
+		avatarName := make(chan string)
+		errs := make(chan error)
+
+		go func() {
+			avatarBytes, err := io.ReadAll(file)
+			if err != nil {
+				errs <- fmt.Errorf("invalid read operation %w", err)
+				return
+			}
+			defer file.Close()
+
+			fileName := http.DetectContentType(avatarBytes)
+			fileType := strings.Split(fileName, "/")[0]
+			ext := strings.Split(fileName, "/")[1]
+			if fileType != "image" {
+				errs <- fmt.Errorf("invalid file type %w", err)
+				return
+			}
+
+			imageId, err := uuid.NewRandom()
+			if err != nil {
+				errs <- fmt.Errorf("uuid error %w", err)
+				return
+			}
+
+			avatarName <- fmt.Sprintf("%s.%s", imageId, ext)
+			defer close(avatarName)
+		}()
+
+		select {
+		case avatar := <-avatarName:
+			data["avatar"] = avatar
+		case err := <-errs:
+			if err != nil {
+				return util.ResponseHandler(w, err, http.StatusBadRequest)
+			}
+		}
 	}
 
 	data["updated_at"] = time.Now()
@@ -198,7 +227,6 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 
 	result := struct {
 		Status string
-		Data   store.User
 	}{
 		Status: "success",
 	}
@@ -223,4 +251,12 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
 	}
 	return util.ResponseHandler(w, "", http.StatusNoContent)
+}
+
+func userRoutes(gmux *mux.Router, srv *Server) {
+	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
+	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
+
+	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
+	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 }

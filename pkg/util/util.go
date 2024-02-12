@@ -16,6 +16,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type Config struct {
@@ -114,6 +117,15 @@ func ImageThumbnailProcessor(ctx context.Context, file multipart.File) ([]byte, 
 }
 
 func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string) error {
+	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error {
+		lo.Region = "us-east-1"
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("error loading aws configs %w", err)
+	}
+
+	s3.NewFromConfig(cfg)
 	return nil
 }
 
