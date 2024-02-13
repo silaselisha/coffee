@@ -1,4 +1,4 @@
-package services
+package handler
 
 import (
 	"context"
@@ -31,15 +31,26 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	price, _ := strconv.ParseFloat(r.FormValue("price"), 64)
-	ingridients := strings.Split(r.FormValue("ingridients"), ",")
+	fields := []string{"name", "price", "ingridients", "description", "summary"}
+	data := bson.M{}
+	for _, field := range fields {
+		value := r.FormValue(field)
+		if value != "" {
+			data[field] = r.FormValue(field)
+		}
+	}
 
-	data := store.ItemUpdateParams{
-		Name:        r.FormValue("name"),
-		Price:       price,
-		Description: r.FormValue("description"),
-		Summary:     r.FormValue("summary"),
-		Ingridients: ingridients,
+	if data["price"] != "" {
+		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
+		if err != nil {
+			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+		}
+		data["price"] = price
+	}
+
+	if data["ingridients"] != "" {
+		var result []string = strings.Split(r.FormValue("ingridients"), ",")
+		data["ingridients"] = result
 	}
 
 	var updatedDocument store.Item
@@ -64,7 +75,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (s *Server) GetAllProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
 	cur, err := collection.Find(ctx, bson.D{})
@@ -106,10 +117,10 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
-	cur := collection.FindOne(ctx, filter)
+	result := collection.FindOne(ctx, filter)
 
 	var item store.Item
-	err = cur.Decode(&item)
+	err = result.Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
@@ -117,21 +128,21 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	result := struct {
+	res := struct {
 		Status string
 		Data   store.Item
 	}{
 		Status: "success",
 		Data:   item,
 	}
-	return util.ResponseHandler(w, result, http.StatusOK)
+	return util.ResponseHandler(w, res, http.StatusOK)
 }
 
 func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.db.Collection(ctx, "coffeeshop", "products")
 
-	vars := mux.Vars(r)
-	id, err := primitive.ObjectIDFromHex(vars["id"])
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
@@ -174,12 +185,12 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return
 		}
 
-		_, fileName, err := util.ImageThumbnailProcessor(ctx, file)
+		_, fileName, err := util.ImageResizeProcessor(ctx, file)
 		if err != nil {
 			errs <- err
 			return
 		}
-		
+
 		thumbnailName <- fileName
 		close(thumbnailName)
 		defer file.Close()
@@ -233,4 +244,17 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	return util.ResponseHandler(w, result, http.StatusCreated)
+}
+
+func productRoutes(gmux *mux.Router, srv *Server) {
+	getProductRouter := gmux.Methods(http.MethodGet).Subrouter()
+	postProductRouter := gmux.Methods(http.MethodPost).Subrouter()
+	deleteProductRouter := gmux.Methods(http.MethodDelete).Subrouter()
+	updateProductRouter := gmux.Methods(http.MethodPut).Subrouter()
+
+	postProductRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.CreateProductHandler))
+	getProductRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.GetAllProductsHandler))
+	getProductRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(srv.GetProductByIdHandler))
+	deleteProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(srv.DeleteProductByIdHandler))
+	updateProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(srv.UpdateProductHandler))
 }

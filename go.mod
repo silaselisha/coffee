@@ -3,6 +3,7 @@ module github.com/silaselisha/coffee-api
 go 1.21.1
 
 require (
+	github.com/aws/aws-sdk-go v1.50.16
 	github.com/go-playground/validator/v10 v10.17.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.6.0
@@ -21,6 +22,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/leodido/go-urn v1.3.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
