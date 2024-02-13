@@ -15,4 +15,5 @@ type Querier interface {
 	GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	DeleteUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
+	LoginUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"log"
 
 	"github.com/go-playground/validator/v10"
@@ -17,7 +18,7 @@ type Server struct {
 	envs   *util.Config
 }
 
-func NewServer(client *mongo.Client) store.Querier {
+func NewServer(ctx context.Context, client *mongo.Client) store.Querier {
 	server := &Server{}
 
 	envs, err := util.LoadEnvs("./../../")

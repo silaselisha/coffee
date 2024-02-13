@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/stretchr/testify/require"
@@ -142,8 +144,9 @@ func TestCreateProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
-			server := NewServer(mongoClient)
+			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			defer cancel()
+			server := NewServer(ctx, mongoClient)
 
 			url := "/products"
 			recorder := httptest.NewRecorder()
@@ -186,8 +189,9 @@ func TestUpdateProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
-			server := NewServer(mongoClient)
+			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			defer cancel()
+			server := NewServer(ctx, mongoClient)
 
 			url := fmt.Sprintf("/products/%s", test.id)
 			recorder := httptest.NewRecorder()
@@ -220,7 +224,9 @@ func TestGetAllProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := NewServer(mongoClient)
+			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			defer cancel()
+			server := NewServer(ctx, mongoClient)
 
 			url := "/products"
 			recorder := httptest.NewRecorder()
@@ -278,7 +284,9 @@ func TestGetProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := NewServer(mongoClient)
+			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			defer cancel()
+			server := NewServer(ctx, mongoClient)
 
 			url := fmt.Sprintf("/products/%s/%s", test.category["category"], test.id)
 			recorder := httptest.NewRecorder()
@@ -325,7 +333,9 @@ func TestDeleteProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := NewServer(mongoClient)
+			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			defer cancel()
+			server := NewServer(ctx, mongoClient)
 
 			url := fmt.Sprintf("/products/%s", test.id)
 			recorder := httptest.NewRecorder()

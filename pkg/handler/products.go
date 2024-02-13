@@ -185,7 +185,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return
 		}
 
-		_, fileName, err := util.ImageThumbnailProcessor(ctx, file)
+		_, fileName, err := util.ImageResizeProcessor(ctx, file)
 		if err != nil {
 			errs <- err
 			return

@@ -11,15 +11,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
@@ -29,6 +26,48 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	credentialsBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	var credentials userLoginParams
+	json.Unmarshal(credentialsBytes, &credentials)
+	err = s.vd.Struct(credentials)
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	var user store.User
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	curr := collection.FindOne(ctx, bson.D{{Key: "email", Value: credentials.Email}})
+	if err := curr.Decode(&user); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, "document not found", http.StatusBadRequest)
+		}
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	if !util.ComparePasswordEncryption(credentials.Password, user.Password) {
+		return util.ResponseHandler(w, "invalid email or password", http.StatusBadRequest)
+	}
+
+	jwtToken := token.NewToken(s.envs.SecretAccessKey)
+	token, err := jwtToken.CreateToken(ctx, user.Email, time.Second*90)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+	res := struct {
+		Status string
+		Token  string
+	}{
+		Status: "success",
+		Token:  token,
+	}
+	return util.ResponseHandler(w, res, http.StatusOK)
+}
 
 func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.db.Collection(ctx, "coffeeshop", "users")
@@ -92,6 +131,7 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 	var users store.UserList
 	cur, err := collection.Find(ctx, bson.D{{}})
 	if err != nil {
+		log.Print(err)
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
@@ -100,6 +140,10 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 		var user store.User
 		err := cur.Decode(&user)
 		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				break
+			}
+			log.Print(err)
 			return util.ResponseHandler(w, err, http.StatusInternalServerError)
 		}
 		users = append(users, user)
@@ -172,32 +216,25 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 
 	if file, _, err := r.FormFile("avatar"); err == nil {
 		avatarName := make(chan string)
+		avatarFile := make(chan []byte)
 		errs := make(chan error)
-
 		go func() {
-			avatarBytes, err := io.ReadAll(file)
+			avatar, fileName, err := util.ImageResizeProcessor(ctx, file)
 			if err != nil {
-				errs <- fmt.Errorf("invalid read operation %w", err)
-				return
-			}
-			defer file.Close()
-
-			fileName := http.DetectContentType(avatarBytes)
-			fileType := strings.Split(fileName, "/")[0]
-			ext := strings.Split(fileName, "/")[1]
-			if fileType != "image" {
-				errs <- fmt.Errorf("invalid file type %w", err)
+				errs <- err
 				return
 			}
 
-			imageId, err := uuid.NewRandom()
+			err = util.S3awsImageUpload(ctx, avatar, "watamu-coffee-shop", fileName)
 			if err != nil {
-				errs <- fmt.Errorf("uuid error %w", err)
+				errs <- err
 				return
 			}
 
-			avatarName <- fmt.Sprintf("%s.%s", imageId, ext)
-			defer close(avatarName)
+			avatarName <- fileName
+			avatarFile <- avatar	
+			close(avatarName)
+			close(avatarFile)
 		}()
 
 		select {
@@ -254,9 +291,12 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 }
 
 func userRoutes(gmux *mux.Router, srv *Server) {
+	getUserRouter := gmux.Methods(http.MethodGet).Subrouter()
 	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
 
+	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
 	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
+	postUserRouter.HandleFunc("/users/login", util.HandleFuncDecorator(srv.LoginUserHandler))
 	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 }

@@ -1,24 +1,27 @@
 package util
 
 import (
+	"bytes"
 	"context"
 	"crypto"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 type Config struct {
@@ -95,7 +98,7 @@ func CreateNewUser() store.User {
 	return user
 }
 
-func ImageThumbnailProcessor(ctx context.Context, file multipart.File) ([]byte, string, error) {
+func ImageResizeProcessor(ctx context.Context, file multipart.File) ([]byte, string, error) {
 	imageBytes, err := io.ReadAll(file)
 	if err != nil {
 		if err == io.EOF {
@@ -106,26 +109,41 @@ func ImageThumbnailProcessor(ctx context.Context, file multipart.File) ([]byte, 
 	defer file.Close()
 
 	contentType := strings.Split(http.DetectContentType(imageBytes), "/")[0]
-	mimeType := strings.Split(http.DetectContentType(imageBytes), "/")[1]
+	ext := strings.Split(http.DetectContentType(imageBytes), "/")[1]
 	if contentType != "image" {
 		fmt.Println(contentType)
 		return nil, "", fmt.Errorf("wrong file upload, only images required")
 	}
 
-	imageName := fmt.Sprintf("%s.%s", uuid.New(), mimeType)
+	imageId, err := genS3ObjectNames()
+	if err != nil {
+		return nil, "", fmt.Errorf("error generating imageid")
+	}
+
+	imageName := fmt.Sprintf("%s.%s", imageId, ext)
 	return imageBytes, imageName, nil
 }
 
 func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string) error {
-	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error {
-		lo.Region = "us-east-1"
-		return nil
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String("us-east-1"),
 	})
 	if err != nil {
-		return fmt.Errorf("error loading aws configs %w", err)
+		return fmt.Errorf("aws session error %w", err)
 	}
 
-	s3.NewFromConfig(cfg)
+	uploader := s3manager.NewUploader(sess)
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(objectKey),
+		Body:   bytes.NewReader(imageByte),
+	})
+
+	if err != nil {
+		log.Print(err)
+		return err
+	}
+
 	return nil
 }
 
@@ -136,4 +154,13 @@ func PasswordEncryption(password []byte) string {
 func ComparePasswordEncryption(password, comparePassword string) bool {
 	hash := fmt.Sprintf("%x", crypto.SHA256.New().Sum([]byte(comparePassword)))
 	return hash == password
+}
+
+func genS3ObjectNames() (string, error) {
+	buff := make([]byte, 16)
+	_, err := rand.Read(buff)
+	if err != nil {
+		return "", fmt.Errorf("error generating random bytes %w", err)
+	}
+	return fmt.Sprintf("%x", buff), nil
 }
