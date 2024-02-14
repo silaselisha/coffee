@@ -11,10 +11,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -215,34 +217,43 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	if file, _, err := r.FormFile("avatar"); err == nil {
-		avatarName := make(chan string)
-		avatarFile := make(chan []byte)
-		errs := make(chan error)
+		resultChannel := make(chan imageResultParams, 2)
+		var wg sync.WaitGroup
+
+		wg.Add(1)
 		go func() {
-			avatar, fileName, err := util.ImageResizeProcessor(ctx, file)
+			defer wg.Done()
+			avatarFile, avatarName, err := util.ImageResizeProcessor(ctx, file)
 			if err != nil {
-				errs <- err
+				resultChannel <- imageResultParams{err: err}
 				return
 			}
-
-			err = util.S3awsImageUpload(ctx, avatar, "watamu-coffee-shop", fileName)
-			if err != nil {
-				errs <- err
-				return
-			}
-
-			avatarName <- fileName
-			avatarFile <- avatar	
-			close(avatarName)
-			close(avatarFile)
+			log.Print("goroutine 1 ", time.Now())
+			resultChannel <- imageResultParams{avatarFile: avatarFile, avatarName: avatarName}
 		}()
 
-		select {
-		case avatar := <-avatarName:
-			data["avatar"] = avatar
-		case err := <-errs:
+		wg.Add(1)
+		avatarURL := make(chan string)
+		go func(avatarData imageResultParams) {
+			defer wg.Done()
+
+			url, err := util.S3awsImageUpload(ctx, avatarData.avatarFile, "watamu-coffee-shop", avatarData.avatarName, "images/avatars")
+			fmt.Println(url)
 			if err != nil {
-				return util.ResponseHandler(w, err, http.StatusBadRequest)
+				resultChannel <- imageResultParams{err: err}
+				return
+			}
+			avatarURL <- url
+			close(avatarURL)
+		}(<-resultChannel)
+
+		select {
+		case avatarName := <-avatarURL:
+			data["avatar"] = avatarName
+
+		case result := <-resultChannel:
+			if result.err != nil {
+				return util.ResponseHandler(w, err, http.StatusInternalServerError)
 			}
 		}
 	}

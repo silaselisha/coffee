@@ -120,18 +120,24 @@ func ImageResizeProcessor(ctx context.Context, file multipart.File) ([]byte, str
 		return nil, "", fmt.Errorf("error generating imageid")
 	}
 
+	switch ext {
+	case "jpeg":
+		ext = "jpg"
+	default:
+	}
 	imageName := fmt.Sprintf("%s.%s", imageId, ext)
 	return imageBytes, imageName, nil
 }
 
-func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string) error {
+func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string, resource string) (string, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String("us-east-1"),
 	})
 	if err != nil {
-		return fmt.Errorf("aws session error %w", err)
+		return "", fmt.Errorf("aws session error %w", err)
 	}
 
+	objectKey = fmt.Sprintf("%s/%s", resource, objectKey)
 	uploader := s3manager.NewUploader(sess)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
@@ -141,10 +147,11 @@ func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, obje
 
 	if err != nil {
 		log.Print(err)
-		return err
+		return "", err
 	}
 
-	return nil
+	avatarURL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucket, objectKey)
+	return avatarURL, nil
 }
 
 func PasswordEncryption(password []byte) string {
