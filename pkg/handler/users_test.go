@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -114,6 +115,56 @@ func TestUserLogin(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(userCred))
 			recorder := httptest.NewRecorder()
 			server.(*Server).Router.ServeHTTP(recorder, request)
+			test.check(t, recorder)
+		})
+	}
+}
+
+func TestDeleteUser(t *testing.T) {
+	tests := []struct {
+		name   string
+		body   map[string]interface{}
+		userId string
+		check  func(t *testing.T, recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:   "delete on status 400",
+			body:   map[string]interface{}{},
+			userId: "65bcc06",
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name:   "delete on status 400",
+			body:   map[string]interface{}{},
+			userId: "65bcc06cbc92379c5b6fe79b",
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name:   "delete on status 204",
+			body:   map[string]interface{}{},
+			userId: userId,
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNoContent, recorder.Code)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			url := fmt.Sprintf("/users/%s", test.body["id"])
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodDelete, url, nil)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			server := NewServer(ctx, mongoClient)
+			mux := server.(*Server)
+			mux.Router.ServeHTTP(recorder, request)
 			test.check(t, recorder)
 		})
 	}
