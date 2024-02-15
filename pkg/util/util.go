@@ -91,8 +91,8 @@ func CreateNewProduct() store.Item {
 func CreateNewUser() store.User {
 	user := store.User{
 		UserName:    "al3xa",
-		Email:       "al3xa@aws.ac.us",
-		Password:    "Abstarct&87",
+		Email:       "al3xa@aws.ac.ch",
+		Password:    "abstarct&87",
 		PhoneNumber: "+1(571)360-6677",
 	}
 	return user

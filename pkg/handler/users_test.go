@@ -47,7 +47,43 @@ func TestCreateUserSignup(t *testing.T) {
 				require.NoError(t, err)
 				testToken = result.Token
 				userId = result.Data.Id.Hex()
+				fmt.Println(userId)
 				require.Equal(t, http.StatusCreated, recorder.Code)
+			},
+		},
+		{
+			name: "user signup 400 status code",
+			body: map[string]interface{}{
+				"username": user.UserName,
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "user signup 400 status code",
+			body: map[string]interface{}{
+				"email": user.Email,
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "user signup 400 status code",
+			body: map[string]interface{}{
+				"email":    user.Email,
+				"username": user.UserName,
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "user signup 400 status code",
+			body: map[string]interface{}{},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
@@ -67,6 +103,7 @@ func TestCreateUserSignup(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 			mux := server.(*Server)
 			mux.Router.ServeHTTP(recorder, request)
+			test.check(t, recorder)
 		})
 	}
 }
@@ -88,9 +125,9 @@ func TestUserLogin(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, data)
 
-				var res []struct {
-					Name  string
-					Token string
+				var res struct {
+					Status string
+					Token  string
 				}
 				err = json.Unmarshal(data, &res)
 				require.NoError(t, err)
@@ -125,39 +162,38 @@ func TestDeleteUser(t *testing.T) {
 		name   string
 		body   map[string]interface{}
 		userId string
+		token  string
 		check  func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
+
 		{
-			name:   "delete on status 400",
-			body:   map[string]interface{}{},
-			userId: "65bcc06",
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
-			},
-		},
-		{
-			name:   "delete on status 400",
-			body:   map[string]interface{}{},
-			userId: "65bcc06cbc92379c5b6fe79b",
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
-			},
-		},
-		{
-			name:   "delete on status 204",
+			name:   "delete user's account | status 204",
 			body:   map[string]interface{}{},
 			userId: userId,
+			token:  testToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				fmt.Println(recorder.Code)
 				require.Equal(t, http.StatusNoContent, recorder.Code)
+			},
+		},
+		{
+			name:   "delete user's account | status 400",
+			body:   map[string]interface{}{},
+			userId: "1234",
+			token:  testToken,
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				fmt.Println(recorder.Code)
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			url := fmt.Sprintf("/users/%s", test.body["id"])
+			url := fmt.Sprintf("/users/%s", test.userId)
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodDelete, url, nil)
+			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", test.token))
 
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()

@@ -74,15 +74,17 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 
 func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.db.Collection(ctx, "coffeeshop", "users")
-	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "email", Value: 1}, {Key: "username", Value: 1}},
-		Options: options.Index().SetUnique(true),
+	_, err := collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "username", Value: 1}}, Options: options.Index().SetUnique(true)},
 	})
+
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
 	var data store.User
+
 	userBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
@@ -90,6 +92,10 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	err = json.Unmarshal(userBytes, &data)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	if err := s.vd.Struct(data); err != nil {
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
 	hashedPassword := util.PasswordEncryption([]byte(data.Password))
@@ -289,15 +295,17 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
-
+	
 	var deletedDocument bson.M
 	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&deletedDocument)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
+			fmt.Println(err)
 			return util.ResponseHandler(w, "invalid operation on data", http.StatusBadRequest)
 		}
 		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
 	}
+
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 
@@ -305,6 +313,7 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	getUserRouter := gmux.Methods(http.MethodGet).Subrouter()
 	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
+	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
 	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
 	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
@@ -312,4 +321,7 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 
 	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
 	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
+
+	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
+	deleteUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.DeleteUserByIdHandler))
 }
