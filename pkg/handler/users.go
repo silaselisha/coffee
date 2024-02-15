@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/pkg/util"
@@ -259,7 +260,6 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	data["updated_at"] = time.Now()
-	log.Print(data)
 	filter := bson.D{{Key: "_id", Value: id}}
 	update := bson.M{"$set": data}
 
@@ -309,5 +309,7 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
 	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
 	postUserRouter.HandleFunc("/users/login", util.HandleFuncDecorator(srv.LoginUserHandler))
+
+	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
 	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 }

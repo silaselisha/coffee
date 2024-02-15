@@ -11,7 +11,7 @@ import (
 
 type Token interface {
 	CreateToken(ctx context.Context, email string, duration time.Duration) (string, error)
-	VerifyToken(ctx context.Context, token string) (interface{}, error)
+	VerifyToken(ctx context.Context, token string) (*Payload, error)
 }
 
 type JWToken struct {
@@ -38,7 +38,7 @@ func (tkn *JWToken) CreateToken(ctx context.Context, email string, duration time
 	return tokenString, nil
 }
 
-func (tkn *JWToken) VerifyToken(ctx context.Context, tok string) (interface{}, error) {
+func (tkn *JWToken) VerifyToken(ctx context.Context, tok string) (*Payload, error) {
 	keyFunc := func(token *jwt.Token) (interface{}, error) {
 		_, ok := token.Method.(*jwt.SigningMethodHMAC)
 		if !ok {
@@ -56,5 +56,10 @@ func (tkn *JWToken) VerifyToken(ctx context.Context, tok string) (interface{}, e
 		return nil, err
 	}
 
-	return token.Claims.(*Payload), nil
+	payload, ok := token.Claims.(*Payload)
+	if !ok {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	return payload, nil
 }

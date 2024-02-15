@@ -154,8 +154,8 @@ func PasswordEncryption(password []byte) string {
 }
 
 func ComparePasswordEncryption(password, comparePassword string) bool {
-	hash := fmt.Sprintf("%x", crypto.SHA256.New().Sum([]byte(comparePassword)))
-	return hash == password
+	hash := fmt.Sprintf("%x", crypto.SHA256.New().Sum([]byte(password)))
+	return hash == comparePassword
 }
 
 func genS3ObjectNames() (string, error) {
