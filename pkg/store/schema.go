@@ -22,17 +22,17 @@ type Item struct {
 }
 
 type User struct {
-	Id                primitive.ObjectID `bson:"_id"`
-	Avatar            string             `bson:"avatar"`
-	UserName          string             `bson:"username"`
-	Role              string             `bson:"role"`
-	Email             string             `bson:"email"`
-	PhoneNumber       string             `bson:"phoneNumber"`
-	Verified          bool               `bson:"verified"`
-	Password          string             `bson:"password"`
+	Id          primitive.ObjectID `bson:"_id"`
+	Avatar      string             `bson:"avatar"`
+	UserName    string             `bson:"username" validate:"required"`
+	Role        string             `bson:"role"`
+	Email       string             `bson:"email" validate:"required"`
+	PhoneNumber string             `bson:"phoneNumber" validate:"required"`
+	Verified    bool               `bson:"verified"`
+	Password    string             `bson:"password" validate:"required"`
 	// PasswordChangedAt time.Time          `bson:"password_changed_at"`
-	CreatedAt         time.Time          `bson:"created_at"`
-	UpdatedAt         time.Time          `bson:"updated_at"`
+	CreatedAt time.Time `bson:"created_at"`
+	UpdatedAt time.Time `bson:"updated_at"`
 }
 
 type Reservation struct {

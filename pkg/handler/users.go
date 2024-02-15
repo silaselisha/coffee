@@ -11,13 +11,16 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/pkg/util"
@@ -71,15 +74,17 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 
 func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.db.Collection(ctx, "coffeeshop", "users")
-	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "email", Value: 1}, {Key: "username", Value: 1}},
-		Options: options.Index().SetUnique(true),
+	_, err := collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "username", Value: 1}}, Options: options.Index().SetUnique(true)},
 	})
+
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
 	var data store.User
+
 	userBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
@@ -87,6 +92,10 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	err = json.Unmarshal(userBytes, &data)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	if err := s.vd.Struct(data); err != nil {
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
 	hashedPassword := util.PasswordEncryption([]byte(data.Password))
@@ -215,40 +224,48 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	if file, _, err := r.FormFile("avatar"); err == nil {
-		avatarName := make(chan string)
-		avatarFile := make(chan []byte)
-		errs := make(chan error)
+		resultChannel := make(chan imageResultParams, 2)
+		var wg sync.WaitGroup
+
+		wg.Add(1)
 		go func() {
-			avatar, fileName, err := util.ImageResizeProcessor(ctx, file)
+			defer wg.Done()
+			avatarFile, avatarName, err := util.ImageResizeProcessor(ctx, file)
 			if err != nil {
-				errs <- err
+				resultChannel <- imageResultParams{err: err}
 				return
 			}
-
-			err = util.S3awsImageUpload(ctx, avatar, "watamu-coffee-shop", fileName)
-			if err != nil {
-				errs <- err
-				return
-			}
-
-			avatarName <- fileName
-			avatarFile <- avatar	
-			close(avatarName)
-			close(avatarFile)
+			log.Print("goroutine 1 ", time.Now())
+			resultChannel <- imageResultParams{avatarFile: avatarFile, avatarName: avatarName}
 		}()
 
-		select {
-		case avatar := <-avatarName:
-			data["avatar"] = avatar
-		case err := <-errs:
+		wg.Add(1)
+		avatarURL := make(chan string)
+		go func(avatarData imageResultParams) {
+			defer wg.Done()
+
+			url, err := util.S3awsImageUpload(ctx, avatarData.avatarFile, "watamu-coffee-shop", avatarData.avatarName, "images/avatars")
+			fmt.Println(url)
 			if err != nil {
-				return util.ResponseHandler(w, err, http.StatusBadRequest)
+				resultChannel <- imageResultParams{err: err}
+				return
+			}
+			avatarURL <- url
+			close(avatarURL)
+		}(<-resultChannel)
+
+		select {
+		case avatarName := <-avatarURL:
+			data["avatar"] = avatarName
+
+		case result := <-resultChannel:
+			if result.err != nil {
+				return util.ResponseHandler(w, err, http.StatusInternalServerError)
 			}
 		}
 	}
 
 	data["updated_at"] = time.Now()
-	log.Print(data)
 	filter := bson.D{{Key: "_id", Value: id}}
 	update := bson.M{"$set": data}
 
@@ -278,15 +295,17 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
-
+	
 	var deletedDocument bson.M
 	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&deletedDocument)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
+			fmt.Println(err)
 			return util.ResponseHandler(w, "invalid operation on data", http.StatusBadRequest)
 		}
 		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
 	}
+
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 
@@ -294,9 +313,15 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	getUserRouter := gmux.Methods(http.MethodGet).Subrouter()
 	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
+	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
 	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
 	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
 	postUserRouter.HandleFunc("/users/login", util.HandleFuncDecorator(srv.LoginUserHandler))
+
+	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
 	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
+
+	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
+	deleteUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.DeleteUserByIdHandler))
 }

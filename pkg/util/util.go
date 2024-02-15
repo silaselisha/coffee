@@ -91,8 +91,8 @@ func CreateNewProduct() store.Item {
 func CreateNewUser() store.User {
 	user := store.User{
 		UserName:    "al3xa",
-		Email:       "al3xa@aws.ac.us",
-		Password:    "Abstarct&87",
+		Email:       "al3xa@aws.ac.ch",
+		Password:    "abstarct&87",
 		PhoneNumber: "+1(571)360-6677",
 	}
 	return user
@@ -124,14 +124,15 @@ func ImageResizeProcessor(ctx context.Context, file multipart.File) ([]byte, str
 	return imageBytes, imageName, nil
 }
 
-func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string) error {
+func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string, resource string) (string, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String("us-east-1"),
 	})
 	if err != nil {
-		return fmt.Errorf("aws session error %w", err)
+		return "", fmt.Errorf("aws session error %w", err)
 	}
 
+	objectKey = fmt.Sprintf("%s/%s", resource, objectKey)
 	uploader := s3manager.NewUploader(sess)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
@@ -141,10 +142,11 @@ func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, obje
 
 	if err != nil {
 		log.Print(err)
-		return err
+		return "", err
 	}
 
-	return nil
+	avatarURL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucket, objectKey)
+	return avatarURL, nil
 }
 
 func PasswordEncryption(password []byte) string {
@@ -152,8 +154,8 @@ func PasswordEncryption(password []byte) string {
 }
 
 func ComparePasswordEncryption(password, comparePassword string) bool {
-	hash := fmt.Sprintf("%x", crypto.SHA256.New().Sum([]byte(comparePassword)))
-	return hash == password
+	hash := fmt.Sprintf("%x", crypto.SHA256.New().Sum([]byte(password)))
+	return hash == comparePassword
 }
 
 func genS3ObjectNames() (string, error) {
