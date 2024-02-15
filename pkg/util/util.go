@@ -120,11 +120,6 @@ func ImageResizeProcessor(ctx context.Context, file multipart.File) ([]byte, str
 		return nil, "", fmt.Errorf("error generating imageid")
 	}
 
-	switch ext {
-	case "jpeg":
-		ext = "jpg"
-	default:
-	}
 	imageName := fmt.Sprintf("%s.%s", imageId, ext)
 	return imageBytes, imageName, nil
 }
