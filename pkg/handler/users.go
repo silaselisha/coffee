@@ -58,7 +58,7 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	}
 
 	jwtToken := token.NewToken(s.envs.SecretAccessKey)
-	token, err := jwtToken.CreateToken(ctx, 90 * time.Second, user.Id.Hex(), user.Email)
+	token, err := jwtToken.CreateToken(ctx, 90*time.Second, user.Id.Hex(), user.Email)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -174,19 +174,25 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	collection := s.db.Collection(ctx, "coffeeshop", "users")
 
 	params := mux.Vars(r)
-	
+
 	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
+	payload := ctx.Value(middleware.AuthUser).(*token.Payload)
+	if payload.Id != id.Hex() {
+		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
+	}
+
 	result := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
-	result.Decode(&user)
-
-	payload := ctx.Value(middleware.AuthUser).(*token.Payload)
-	if payload.Id != user.Id.Hex() {
-		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
+	err = result.Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, "idocument not found", http.StatusNotFound)
+		}
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
 	res := struct {
@@ -209,9 +215,13 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
+	payload := r.Context().Value(middleware.AuthUser).(*token.Payload)
+	if payload.Id != id.Hex() {
+		return util.ResponseHandler(w, err, http.StatusForbidden)
+	}
+
 	err = r.ParseMultipartForm(int64(32 << 20))
 	if err != nil {
-		log.Print(err.Error())
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
@@ -272,10 +282,10 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 
 	var updatedDocument store.User
 	err = collection.FindOneAndUpdate(ctx, filter, update).Decode(&updatedDocument)
+
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			log.Print(err.Error())
-			return util.ResponseHandler(w, err, http.StatusNotFound)
+			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
 		}
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -295,6 +305,11 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	payload := r.Context().Value(middleware.AuthUser).(*token.Payload)
+	if payload.Id != id.Hex() {
+		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
 
 	var deletedDocument bson.M
