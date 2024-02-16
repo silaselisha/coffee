@@ -30,12 +30,14 @@ func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 				return
 			}
 
-			_, err := tkn.VerifyToken(context.Background(), fields[1])
+			payload, err := tkn.VerifyToken(context.Background(), fields[1])
 			if err != nil {
 				http.Error(w, "invalid token", http.StatusForbidden)
 				return
 			}
 
+			ctx := context.WithValue(r.Context(), AuthUser, payload)
+			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})
 	}
