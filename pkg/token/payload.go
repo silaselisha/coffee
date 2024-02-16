@@ -2,24 +2,17 @@ package token
 
 import (
 	"errors"
-	"fmt"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Payload struct {
 	Email     string
-	Id        uuid.UUID
+	Id        string
 	IssuedAt  time.Time
 	ExpiredAt time.Time
 }
 
-func createNewPayload(duration time.Duration, email string) (*Payload, error) {
-	id, err := uuid.NewRandom()
-	if err != nil {
-		return nil, fmt.Errorf("error creating a uuid %w", err)
-	}
+func createNewPayload(duration time.Duration, id, email string) (*Payload, error) {
 	return &Payload{
 		Email:     email,
 		Id:        id,

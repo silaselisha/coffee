@@ -10,7 +10,7 @@ import (
 )
 
 type Token interface {
-	CreateToken(ctx context.Context, email string, duration time.Duration) (string, error)
+	CreateToken(ctx context.Context, duration time.Duration, id, email string) (string, error)
 	VerifyToken(ctx context.Context, token string) (*Payload, error)
 }
 
@@ -24,8 +24,8 @@ func NewToken(secret string) Token {
 	}
 }
 
-func (tkn *JWToken) CreateToken(ctx context.Context, email string, duration time.Duration) (string, error) {
-	payload, err := createNewPayload(duration, email)
+func (tkn *JWToken) CreateToken(ctx context.Context, duration time.Duration, id string, email string) (string, error) {
+	payload, err := createNewPayload(duration, id, email)
 	if err != nil {
 		return "", err
 	}

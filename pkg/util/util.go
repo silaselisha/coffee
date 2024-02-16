@@ -52,7 +52,7 @@ func LoadEnvs(path string) (config *Config, err error) {
 
 func HandleFuncDecorator(handle func(ctx context.Context, w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		handle(context.Background(), w, r)
+		handle(r.Context(), w, r)
 	}
 }
 

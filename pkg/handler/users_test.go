@@ -268,12 +268,21 @@ func TestGetUserById(t *testing.T) {
 			},
 		},
 		{
-			name:  "get user by id | status code 404",
+			name:  "get user by id | status code 400",
+			body:  map[string]interface{}{},
+			id:    "1234",
+			token: testToken,
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name:  "get user by id | status code 403",
 			body:  map[string]interface{}{},
 			id:    "65bcc06cbc92379c5b6fe79b",
 			token: testToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
+				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
 		},
 		{
@@ -384,6 +393,21 @@ func TestUpdateUserById(t *testing.T) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
+		{
+			name:  "update user by id | status code 400",
+			id:    "1234",
+			token: testToken,
+			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+
+				defer writer.Close()
+				return body, writer
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -434,6 +458,16 @@ func TestDeleteUser(t *testing.T) {
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				fmt.Println(recorder.Code)
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name:   "delete user's account | status 400",
+			body:   map[string]interface{}{},
+			userId: "65bcc06cbc92379c5b6fe79b",
+			token:  testToken,
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				fmt.Println(recorder.Code)
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 	}
