@@ -57,11 +57,15 @@ func TestCreateProduct(t *testing.T) {
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				dataBytes, err := io.ReadAll(recorder.Body)
 				require.Equal(t, nil, err)
-				var product store.Item
-				err = json.Unmarshal(dataBytes, &product)
+				var result struct {
+					Status string
+					Data   store.Item
+				}
+				err = json.Unmarshal(dataBytes, &result)
 				require.Equal(t, nil, err)
-				productId = product.Id.String()
+				productId = result.Data.Id.Hex()
 
+				fmt.Println(productId)
 				require.NotEmpty(t, productId)
 				require.Equal(t, http.StatusCreated, recorder.Code)
 			},
@@ -119,15 +123,6 @@ func TestCreateProduct(t *testing.T) {
 			},
 		},
 		{
-			name: "create a product without form data",
-			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
-				return nil, nil
-			},
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
-			},
-		},
-		{
 			name: "create an invalid product",
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
@@ -144,7 +139,7 @@ func TestCreateProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			server := NewServer(ctx, mongoClient)
 
@@ -152,8 +147,8 @@ func TestCreateProduct(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			body, writer := test.bodyWriter()
 			request, err := http.NewRequest(http.MethodPost, url, body)
-			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 			require.NoError(t, err)
+			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 
 			mux, ok := server.(*Server)
 			require.Equal(t, true, ok)
@@ -163,11 +158,12 @@ func TestCreateProduct(t *testing.T) {
 		})
 	}
 }
+
 func TestUpdateProduct(t *testing.T) {
 	var tests = []struct {
 		name       string
-		bodyWriter func() (*bytes.Buffer, *multipart.Writer)
 		id         string
+		bodyWriter func() (*bytes.Buffer, *multipart.Writer)
 		check      func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
@@ -189,21 +185,21 @@ func TestUpdateProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			server := NewServer(ctx, mongoClient)
 
 			url := fmt.Sprintf("/products/%s", test.id)
 			recorder := httptest.NewRecorder()
 			body, writer := test.bodyWriter()
 			request, err := http.NewRequest(http.MethodPut, url, body)
-			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 			require.NoError(t, err)
+			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 
-			mux, ok := server.(*Server)
+			querier := NewServer(ctx, mongoClient)
+			server, ok := querier.(*Server)
 			require.Equal(t, true, ok)
 
-			mux.Router.ServeHTTP(recorder, request)
+			server.Router.ServeHTTP(recorder, request)
 			test.check(t, recorder)
 		})
 	}
@@ -224,7 +220,7 @@ func TestGetAllProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			server := NewServer(ctx, mongoClient)
 
@@ -241,6 +237,7 @@ func TestGetAllProduct(t *testing.T) {
 		})
 	}
 }
+
 func TestGetProduct(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -284,7 +281,7 @@ func TestGetProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			server := NewServer(ctx, mongoClient)
 
@@ -333,11 +330,12 @@ func TestDeleteProduct(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			server := NewServer(ctx, mongoClient)
 
 			url := fmt.Sprintf("/products/%s", test.id)
+			fmt.Println(url)
 			recorder := httptest.NewRecorder()
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)

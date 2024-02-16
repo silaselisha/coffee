@@ -48,7 +48,7 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	curr := collection.FindOne(ctx, bson.D{{Key: "email", Value: credentials.Email}})
 	if err := curr.Decode(&user); err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, "document not found", http.StatusBadRequest)
+			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
 		}
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -152,7 +152,7 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 			if err == mongo.ErrNoDocuments {
 				break
 			}
-			log.Print(err)
+
 			return util.ResponseHandler(w, err, http.StatusInternalServerError)
 		}
 		users = append(users, user)
@@ -274,7 +274,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			log.Print(err.Error())
-			return util.ResponseHandler(w, err, http.StatusBadRequest)
+			return util.ResponseHandler(w, err, http.StatusNotFound)
 		}
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -315,7 +315,10 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
 	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
+	getUserRouter.Use(middleware.AuthMiddleware(srv.token))
+
 	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
+	getUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
 	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
 	postUserRouter.HandleFunc("/users/login", util.HandleFuncDecorator(srv.LoginUserHandler))
 
