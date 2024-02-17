@@ -6,7 +6,7 @@ type userLoginParams struct {
 }
 
 type imageResultParams struct {
-	avatarName   string
+	avatarName string
 	avatarFile []byte
 	err        error
 }

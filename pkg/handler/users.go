@@ -180,11 +180,13 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
-	payload := ctx.Value(middleware.AuthUser).(*token.Payload)
+	payload := ctx.Value(middleware.AuthKey{}).(*token.Payload)
+	
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
 	}
-
+	
+	ctx.Value(middleware.RolesKey{})
 	result := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
 	err = result.Decode(&user)
@@ -215,7 +217,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthUser).(*token.Payload)
+	payload := r.Context().Value(middleware.AuthKey{}).(*token.Payload)
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
@@ -307,7 +309,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthUser).(*token.Payload)
+	payload := r.Context().Value(middleware.AuthKey{}).(*token.Payload)
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
@@ -330,6 +332,7 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
 	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
+	getUserRouter.Use(middleware.RestrictToMiddleware("admin", "user"))
 	getUserRouter.Use(middleware.AuthMiddleware(srv.token))
 
 	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
