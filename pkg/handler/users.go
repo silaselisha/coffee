@@ -174,14 +174,12 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	collection := s.db.Collection(ctx, "coffeeshop", "users")
 
 	params := mux.Vars(r)
-
 	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
 	payload := ctx.Value(middleware.AuthKey{}).(*token.Payload)
-
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
 	}
@@ -331,8 +329,8 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
 	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
-	getUserRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin", "user"))
 	getUserRouter.Use(middleware.AuthMiddleware(srv.token))
+	getUserRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin"))
 
 	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
 	getUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
