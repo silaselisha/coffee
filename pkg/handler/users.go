@@ -138,16 +138,16 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 	collection := s.db.Collection(ctx, "coffeeshop", "users")
 
 	var users store.UserList
-	cur, err := collection.Find(ctx, bson.D{{}})
+	curr, err := collection.Find(ctx, bson.D{{}})
 	if err != nil {
 		log.Print(err)
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	defer cur.Close(ctx)
-	for cur.Next(ctx) {
+	defer curr.Close(ctx)
+	for curr.Next(ctx) {
 		var user store.User
-		err := cur.Decode(&user)
+		err := curr.Decode(&user)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				break
@@ -181,15 +181,14 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	payload := ctx.Value(middleware.AuthKey{}).(*token.Payload)
-	
+
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
 	}
-	
-	ctx.Value(middleware.RolesKey{})
-	result := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
+
+	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
-	err = result.Decode(&user)
+	err = curr.Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "idocument not found", http.StatusNotFound)
@@ -197,14 +196,14 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	res := struct {
+	result := struct {
 		Status string
 		Data   store.User
 	}{
 		Status: "sucess",
 		Data:   user,
 	}
-	return util.ResponseHandler(w, res, http.StatusOK)
+	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -332,7 +331,7 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
 	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
-	getUserRouter.Use(middleware.RestrictToMiddleware("admin", "user"))
+	getUserRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin", "user"))
 	getUserRouter.Use(middleware.AuthMiddleware(srv.token))
 
 	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))

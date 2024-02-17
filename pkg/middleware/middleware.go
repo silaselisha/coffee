@@ -6,11 +6,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type AuthKey struct{}
-type RolesKey struct{}
 
 func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -45,7 +46,7 @@ func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 	}
 }
 
-func RestrictToMiddleware(args ...string) func(next http.Handler) http.Handler {
+func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var isAuthorized bool
@@ -64,13 +65,29 @@ func RestrictToMiddleware(args ...string) func(next http.Handler) http.Handler {
 			}
 
 			if !isAuthorized {
-				err := errors.New("user forbidden to access this resource")
+				err := errors.New("user forbidden to perform an operation on this resource 1")
 				http.Error(w, err.Error(), http.StatusForbidden)
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), RolesKey{}, authorized)
-			r = r.WithContext(ctx)
+			payload := r.Context().Value(AuthKey{}).(*token.Payload)
+			var user store.User
+			collection := str.Collection(r.Context(), "coffeeshop", "users")
+			curr := collection.FindOne(r.Context(), bson.D{{Key: "_id", Value: payload.Id}})
+
+			err := curr.Decode(&user)
+			if err != nil {
+				err := errors.New("user forbidden to perform an operation on this resource 2")
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+
+			_, ok := authorized[user.Role]
+			if !ok {
+				err := errors.New("user forbidden to perform an operation on this resource 3")
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
 			next.ServeHTTP(w, r)
 		})
 	}
