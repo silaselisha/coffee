@@ -63,10 +63,10 @@ func TestCreateProduct(t *testing.T) {
 				}
 				err = json.Unmarshal(dataBytes, &result)
 				require.Equal(t, nil, err)
-				productId = result.Data.Id.Hex()
+				productID = result.Data.Id.Hex()
 
-				fmt.Println(productId)
-				require.NotEmpty(t, productId)
+				fmt.Println(productID)
+				require.NotEmpty(t, productID)
 				require.Equal(t, http.StatusCreated, recorder.Code)
 			},
 		},
@@ -168,7 +168,7 @@ func TestUpdateProduct(t *testing.T) {
 	}{
 		{
 			name: "update a product",
-			id:   productId,
+			id:   productID,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -248,7 +248,7 @@ func TestGetProduct(t *testing.T) {
 		{
 			name:     "get product by category & id",
 			category: map[string]interface{}{"category": "beverages"},
-			id:       productId,
+			id:       productID,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
@@ -264,7 +264,7 @@ func TestGetProduct(t *testing.T) {
 		{
 			name:     "get product by invalid category",
 			category: map[string]interface{}{"category": "beverage"},
-			id:       productId,
+			id:       productID,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
@@ -307,7 +307,7 @@ func TestDeleteProduct(t *testing.T) {
 	}{
 		{
 			name: "delete product by id",
-			id:   productId,
+			id:   productID,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNoContent, recorder.Code)
 			},

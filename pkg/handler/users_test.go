@@ -20,7 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var user = util.CreateNewUser()
+var user = util.CreateNewUser("al3xa@aws.ac.uk", "al3xa", "+1(571)360-6677", "user")
+var admin = util.CreateNewUser("admin@aws.ac.uk", "latt3", "+1(571)180-8899", "admin")
 
 func TestCreateUserSignup(t *testing.T) {
 	tests := []struct {
@@ -48,9 +49,35 @@ func TestCreateUserSignup(t *testing.T) {
 
 				err = json.Unmarshal(body, &result)
 				require.NoError(t, err)
-				testToken = result.Token
-				userId = result.Data.Id.Hex()
-				fmt.Println(userId)
+				userTestToken = result.Token
+				userID = result.Data.Id.Hex()
+				fmt.Println(userID)
+				require.Equal(t, http.StatusCreated, recorder.Code)
+			},
+		},
+		{
+			name: "admin signup | 201 status code",
+			body: map[string]interface{}{
+				"username":    admin.UserName,
+				"email":       admin.Email,
+				"password":    admin.Password,
+				"phoneNumber": admin.PhoneNumber,
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				var result struct {
+					Status string
+					Token  string
+					Data   store.User
+				}
+				body, err := io.ReadAll(recorder.Body)
+				require.NoError(t, err)
+				require.NotEmpty(t, body)
+
+				err = json.Unmarshal(body, &result)
+				require.NoError(t, err)
+				adminTestToken = result.Token
+				adminID = result.Data.Id.Hex()
+				fmt.Println(adminID)
 				require.Equal(t, http.StatusCreated, recorder.Code)
 			},
 		},
@@ -121,7 +148,7 @@ func TestUserLogin(t *testing.T) {
 		check func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name: "login user | 200 status code",
+			name: "user login | 200 status code",
 			body: map[string]interface{}{
 				"email":    user.Email,
 				"password": user.Password,
@@ -137,8 +164,30 @@ func TestUserLogin(t *testing.T) {
 				}
 				err = json.Unmarshal(data, &res)
 				require.NoError(t, err)
-				testToken = res.Token
-				fmt.Println(testToken)
+				userTestToken = res.Token
+				fmt.Println(userTestToken)
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name: "admin login | 200 status code",
+			body: map[string]interface{}{
+				"email":    user.Email,
+				"password": user.Password,
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				data, err := io.ReadAll(recorder.Body)
+				require.NoError(t, err)
+				require.NotEmpty(t, data)
+
+				var res struct {
+					Status string
+					Token  string
+				}
+				err = json.Unmarshal(data, &res)
+				require.NoError(t, err)
+				adminTestToken = res.Token
+				fmt.Println(userTestToken)
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
 		},
@@ -204,7 +253,7 @@ func TestGetAllUsers(t *testing.T) {
 	}{
 		{
 			name:  "get all users | status 200",
-			token: testToken,
+			token: adminTestToken,
 			body:  map[string]interface{}{},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -251,8 +300,8 @@ func TestGetUserById(t *testing.T) {
 		{
 			name:  "get user by id | status code 200",
 			body:  map[string]interface{}{},
-			id:    userId,
-			token: testToken,
+			id:    userID,
+			token: userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
@@ -261,7 +310,7 @@ func TestGetUserById(t *testing.T) {
 			name:  "get user by id | status code 400",
 			body:  map[string]interface{}{},
 			id:    "62acegtuvzdx",
-			token: testToken,
+			token: userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
@@ -270,7 +319,7 @@ func TestGetUserById(t *testing.T) {
 			name:  "get user by id | status code 400",
 			body:  map[string]interface{}{},
 			id:    "1234",
-			token: testToken,
+			token: userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
@@ -279,7 +328,7 @@ func TestGetUserById(t *testing.T) {
 			name:  "get user by id | status code 403",
 			body:  map[string]interface{}{},
 			id:    "65bcc06cbc92379c5b6fe79b",
-			token: testToken,
+			token: userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
@@ -287,7 +336,7 @@ func TestGetUserById(t *testing.T) {
 		{
 			name:  "get user by id | status code 403",
 			body:  map[string]interface{}{},
-			id:    userId,
+			id:    userID,
 			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVjZjhkZGE5ZGI1YWJjZjAwYjczOWQ2IiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE2VDE5OjMxOjIzLjIyMjk1MTgwNSswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDItMTZUMjE6MDE6MjMuMjIyOTUxOTU2KzAzOjAwIn0.AiDjYQnAGkEcKs7w79AKbAuuivs7XtGru4QBVTTSy9c",
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
@@ -334,8 +383,8 @@ func TestUpdateUserById(t *testing.T) {
 	}{
 		{
 			name:  "update user by id | status code 200",
-			id:    userId,
-			token: testToken,
+			id:    userID,
+			token: userTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -351,8 +400,8 @@ func TestUpdateUserById(t *testing.T) {
 		},
 		{
 			name:  "update user's avatar | status code 200",
-			id:    userId,
-			token: testToken,
+			id:    userID,
+			token: userTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -373,7 +422,7 @@ func TestUpdateUserById(t *testing.T) {
 		},
 		{
 			name:  "update user by id | status code 403",
-			id:    userId,
+			id:    userID,
 			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVjZjhkZGE5ZGI1YWJjZjAwYjczOWQ2IiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE2VDE5OjMxOjIzLjIyMjk1MTgwNSswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDItMTZUMjE6MDE6MjMuMjIyOTUxOTU2KzAzOjAwIn0.AiDjYQnAGkEcKs7w79AKbAuuivs7XtGru4QBVTTSy9c",
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
@@ -389,7 +438,7 @@ func TestUpdateUserById(t *testing.T) {
 		{
 			name:  "update user by id | status code 403",
 			id:    "65bcc06cbc92379c5b6fe79b",
-			token: testToken,
+			token: userTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -404,7 +453,7 @@ func TestUpdateUserById(t *testing.T) {
 		{
 			name:  "update user by id | status code 400",
 			id:    "1234",
-			token: testToken,
+			token: userTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -466,8 +515,17 @@ func TestDeleteUser(t *testing.T) {
 		{
 			name:   "delete user's account | status 204",
 			body:   map[string]interface{}{},
-			userId: userId,
-			token:  testToken,
+			userId: userID,
+			token:  adminTestToken,
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNoContent, recorder.Code)
+			},
+		},
+		{
+			name:   "delete admin's account | status 204",
+			body:   map[string]interface{}{},
+			userId: userID,
+			token:  adminTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNoContent, recorder.Code)
 			},
@@ -476,7 +534,7 @@ func TestDeleteUser(t *testing.T) {
 			name:   "delete user's account | status 400",
 			body:   map[string]interface{}{},
 			userId: "1234",
-			token:  testToken,
+			token:  userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
@@ -485,7 +543,7 @@ func TestDeleteUser(t *testing.T) {
 			name:   "delete user's account | status 403",
 			body:   map[string]interface{}{},
 			userId: "65bcc06cbc92379c5b6fe79b",
-			token:  testToken,
+			token:  userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
