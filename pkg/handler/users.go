@@ -58,7 +58,18 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	}
 
 	jwtToken := token.NewToken(s.envs.SecretAccessKey)
-	token, err := jwtToken.CreateToken(ctx, 90*time.Second, user.Id.Hex(), user.Email)
+	days, err := strconv.Atoi(s.envs.JwtExpiresAt)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	hrs := fmt.Sprintf("%dh", (days * 24))
+	duration, err := time.ParseDuration(hrs)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	token, err := jwtToken.CreateToken(ctx, duration, user.Id.Hex(), user.Email)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -111,12 +122,17 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	jwtoken := token.NewToken(s.envs.SecretAccessKey)
-	minutes, err := strconv.Atoi(s.envs.JwtExpiresAt)
+	days, err := strconv.Atoi(s.envs.JwtExpiresAt)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	duration := time.Minute * time.Duration(minutes)
+	hrs := fmt.Sprintf("%dh", (days * 24))
+	duration, err := time.ParseDuration(hrs)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
 	token, err := jwtoken.CreateToken(ctx, duration, data.Id.Hex(), data.Email)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
@@ -179,17 +195,21 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
-	payload := ctx.Value(middleware.AuthKey{}).(*token.Payload)
-	if payload.Id != id.Hex() {
+	payload := ctx.Value(middleware.AuthPayloadKey{}).(*token.Payload)
+	role := ctx.Value(middleware.AuthRoleKey{}).(string)
+	fmt.Println(id)
+	if payload.Id != id.Hex() && role != "admin" {
 		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
 	}
+
 
 	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
 	err = curr.Decode(&user)
+	fmt.Println(err)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, "idocument not found", http.StatusNotFound)
+			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
 		}
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -214,7 +234,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthKey{}).(*token.Payload)
+	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
@@ -306,7 +326,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthKey{}).(*token.Payload)
+	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
@@ -323,26 +343,36 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 
+func (s *Server) PasswordResetHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	return util.ResponseHandler(w, "", http.StatusPermanentRedirect)
+}
+
+func (s *Server) VerifyUserAccountHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	return util.ResponseHandler(w, "", http.StatusPermanentRedirect)
+}
+
 func userRoutes(gmux *mux.Router, srv *Server) {
-	getUserRouter := gmux.Methods(http.MethodGet).Subrouter()
+	getUsersRouter := gmux.Methods(http.MethodGet).Subrouter()
 	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
 	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
-	getUserRouter.Use(middleware.AuthMiddleware(srv.token))
-	getUserRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin"))
+	getUsersRouter.Use(middleware.AuthMiddleware(srv.token))
 
-	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
-	getUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
-	
+	getAllUsersRouter := getUsersRouter.PathPrefix("/").Subrouter()
+	getAllUsersRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin"))
+	getAllUsersRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
+
+	getUserByIdRouter := getUsersRouter.PathPrefix("/").Subrouter()
+	getUserByIdRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin", "user"))
+	getUserByIdRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
+
 	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
 	postUserRouter.HandleFunc("/users/login", util.HandleFuncDecorator(srv.LoginUserHandler))
 
 	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
-	updateUserRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin", "user"))
 	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 
 	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
-	deleteUserRouter.Use(middleware.RestrictToMiddleware(srv.db, "user"))
 	deleteUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.DeleteUserByIdHandler))
 }

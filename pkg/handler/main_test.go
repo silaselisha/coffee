@@ -16,9 +16,7 @@ var mongoClient *mongo.Client
 var product store.Item
 var productID string
 var userID string
-var adminID string
 var userTestToken string
-var adminTestToken string
 
 func TestMain(m *testing.M) {
 	fmt.Println("RUNNING")

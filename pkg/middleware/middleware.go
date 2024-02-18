@@ -13,7 +13,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type AuthKey struct{}
+type AuthPayloadKey struct{}
+type AuthRoleKey struct{}
 
 func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -41,7 +42,7 @@ func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), AuthKey{}, payload)
+			ctx := context.WithValue(r.Context(), AuthPayloadKey{}, payload)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})
@@ -72,7 +73,7 @@ func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handle
 				return
 			}
 
-			payload := r.Context().Value(AuthKey{}).(*token.Payload)
+			payload := r.Context().Value(AuthPayloadKey{}).(*token.Payload)
 			var user store.User
 			collection := str.Collection(r.Context(), "coffeeshop", "users")
 			id, err := primitive.ObjectIDFromHex(payload.Id)
@@ -91,12 +92,15 @@ func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handle
 				return
 			}
 
-			_, ok := authorized[user.Role]
+			role, ok := authorized[user.Role]
 			if !ok {
 				err := errors.New("user forbidden to perform an operation on this resource")
 				http.Error(w, err.Error(), http.StatusForbidden)
 				return
 			}
+			
+			ctx := context.WithValue(r.Context(), AuthRoleKey{}, role)
+			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})
 	}
