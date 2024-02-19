@@ -197,11 +197,10 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 
 	payload := ctx.Value(middleware.AuthPayloadKey{}).(*token.Payload)
 	role := ctx.Value(middleware.AuthRoleKey{}).(string)
-	fmt.Println(id)
+
 	if payload.Id != id.Hex() && role != "admin" {
 		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
 	}
-
 
 	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
@@ -343,11 +342,54 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 
-func (s *Server) PasswordResetHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	return util.ResponseHandler(w, "", http.StatusPermanentRedirect)
+func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+
+	var forgotPassword forgotPasswordParams
+	forgotPasswordBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+	err = json.Unmarshal(forgotPasswordBytes, &forgotPassword)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+
+	var user store.User
+	curr := collection.FindOne(ctx, bson.D{{Key: "email", Value: forgotPassword.Email}})
+	err = curr.Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, err.Error(), http.StatusNotFound)
+		}
+		
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	token, timestamp, err := util.ResetToken(10)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	// prepare to send the link via email
+	url := fmt.Sprintf("http://localhost:3000/users/resetpaswword?token=%s&timestamp=%d", token, timestamp)
+
+	result := struct {
+		Status  string
+		Message string
+		Data    string
+	}{
+		Status: "success",
+		Message: "URL to reset your password sent to your email",
+		Data: url,
+	}
+
+	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
-func (s *Server) VerifyUserAccountHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	// collection := s.db.Collection(ctx, "coffeeshop", "users")
+
 	return util.ResponseHandler(w, "", http.StatusPermanentRedirect)
 }
 
@@ -356,6 +398,7 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
 	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
+	forgotPasswordRouter := gmux.Methods(http.MethodPost).Subrouter()
 
 	getUsersRouter.Use(middleware.AuthMiddleware(srv.token))
 
@@ -375,4 +418,6 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 
 	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
 	deleteUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.DeleteUserByIdHandler))
+
+	forgotPasswordRouter.HandleFunc("/users/forgotpassword", util.HandleFuncDecorator(srv.ForgotPasswordHandler))
 }

@@ -17,6 +17,8 @@ var product store.Item
 var productID string
 var userID string
 var userTestToken string
+var adminID string
+var adminTestToken string
 
 func TestMain(m *testing.M) {
 	fmt.Println("RUNNING")
@@ -30,6 +32,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	adminID = ""
+	adminTestToken = ""
 
 	product = util.CreateNewProduct()
 	os.Exit(m.Run())
