@@ -362,43 +362,109 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, err.Error(), http.StatusNotFound)
 		}
-		
+
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	token, timestamp, err := util.ResetToken(10)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	// prepare to send the link via email
-	url := fmt.Sprintf("http://localhost:3000/users/resetpaswword?token=%s&timestamp=%d", token, timestamp)
+	timestamp := util.ResetToken(60)
+	url := fmt.Sprintf("http://localhost:3000/resetpassword?token=%s&timestamp=%d", user.Id.Hex(), timestamp)
 
 	result := struct {
 		Status  string
 		Message string
 		Data    string
 	}{
-		Status: "success",
+		Status:  "success",
 		Message: "URL to reset your password sent to your email",
-		Data: url,
+		Data:    url,
 	}
 
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	// collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
 
-	return util.ResponseHandler(w, "", http.StatusPermanentRedirect)
+	queries := r.URL.Query()
+	token := queries["token"][0]
+	timestampStr := queries["timestamp"][0]
+
+	timestamp, err := strconv.Atoi(timestampStr)
+	if err != nil {
+		err = fmt.Errorf("invalid URL reset timestamp %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	isURLValid := time.Now().After(time.UnixMilli(int64(timestamp)))
+	if isURLValid {
+		fmt.Println(isURLValid)
+		err = fmt.Errorf("expired URL reset token, kindly request for a new password reset token")
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	id, err := primitive.ObjectIDFromHex(token)
+	if err != nil {
+		err = fmt.Errorf("invalid URL reset token %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	var passwordRest passwordResetParams
+	passwordRestBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		err = fmt.Errorf("invalid data for password rset %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	err = json.Unmarshal(passwordRestBytes, &passwordRest)
+	if err != nil {
+		err = fmt.Errorf("invalid data for password rset %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	var user store.User
+	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
+	err = curr.Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, err, http.StatusNotFound)
+		}
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	if util.ComparePasswordEncryption(passwordRest.Password, user.Password) {
+		err = fmt.Errorf("provide a new password that you've never used before")
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	password := util.PasswordEncryption([]byte(passwordRest.Password))
+	updatedAt := time.Now()
+	passwordChangedAt := time.Now()
+
+	update := bson.D{{Key: "$set", Value: bson.D{{Key: "password", Value: password}, {Key: "updated_at", Value: updatedAt}, {Key: "password_changed_at", Value: passwordChangedAt}}}}
+
+	err = collection.FindOneAndUpdate(ctx, bson.D{{Key: "_id", Value: id}}, update).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, err, http.StatusNotFound)
+		}
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	result := struct{
+		Status string
+	}{
+		Status: "success",
+	}
+	return util.ResponseHandler(w, result, http.StatusPermanentRedirect)
 }
 
 func userRoutes(gmux *mux.Router, srv *Server) {
 	getUsersRouter := gmux.Methods(http.MethodGet).Subrouter()
 	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
-	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
-	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 	forgotPasswordRouter := gmux.Methods(http.MethodPost).Subrouter()
+	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
+	resetPasswordRouter := gmux.Methods(http.MethodPut).Subrouter()
+	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
 	getUsersRouter.Use(middleware.AuthMiddleware(srv.token))
 
@@ -410,14 +476,14 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	getUserByIdRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin", "user"))
 	getUserByIdRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
 
-	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
-	postUserRouter.HandleFunc("/users/login", util.HandleFuncDecorator(srv.LoginUserHandler))
+	postUserRouter.HandleFunc("/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
+	postUserRouter.HandleFunc("/login", util.HandleFuncDecorator(srv.LoginUserHandler))
 
 	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
 	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 
 	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
 	deleteUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.DeleteUserByIdHandler))
-
-	forgotPasswordRouter.HandleFunc("/users/forgotpassword", util.HandleFuncDecorator(srv.ForgotPasswordHandler))
+	forgotPasswordRouter.HandleFunc("/forgotpassword", util.HandleFuncDecorator(srv.ForgotPasswordHandler))
+	resetPasswordRouter.HandleFunc("/resetpassword", util.HandleFuncDecorator(srv.ResetPasswordHandler))
 }

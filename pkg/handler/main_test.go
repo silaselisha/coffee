@@ -32,8 +32,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	adminID = ""
-	adminTestToken = ""
+	adminID = "65d24b2df041357fe87113bc"
 
 	product = util.CreateNewProduct()
 	os.Exit(m.Run())

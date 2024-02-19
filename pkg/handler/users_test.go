@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var user = util.CreateNewUser("al3xa@aws.ac.uk", "al3xa", "+1(571)360-6677", "user")
+var user = util.CreateNewUser("johndoe@test.com", "doe", "+1(571)360-6677", "user")
 
 func TestCreateUserSignup(t *testing.T) {
 	tests := []struct {
@@ -94,7 +94,7 @@ func TestCreateUserSignup(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			url := "/users/signup"
+			url := "/signup"
 
 			body, err := json.Marshal(test.body)
 			require.NoError(t, err)
@@ -141,6 +141,27 @@ func TestUserLogin(t *testing.T) {
 			},
 		},
 		{
+			name: "admin login | 200 status code",
+			body: map[string]interface{}{
+				"email":    "admin@aws.ac.uk",
+				"password": "Abstract$87",
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				data, err := io.ReadAll(recorder.Body)
+				require.NoError(t, err)
+				require.NotEmpty(t, data)
+
+				var res struct {
+					Status string
+					Token  string
+				}
+				err = json.Unmarshal(data, &res)
+				require.NoError(t, err)
+				adminTestToken = res.Token
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
 			name: "login user wrong email | 404 status code",
 			body: map[string]interface{}{
 				"email":    "test@test.com",
@@ -174,7 +195,7 @@ func TestUserLogin(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			url := "/users/login"
+			url := "/login"
 
 			userCred, err := json.Marshal(test.body)
 			require.NoError(t, err)
@@ -290,7 +311,7 @@ func TestGetUserById(t *testing.T) {
 			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVkMWYzYzRkZjRlNjM4NjAxYTczNjliIiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE4VDE1OjEwOjQ0LjgzNjEyNjE4NiswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDUtMThUMTU6MTA6NDQuODM2MTI2MjQ4KzAzOjAwIn0.P26Jmris4dfH4v-sayNmnFty8yEtOXGhqb4xgtlXkPk",
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				fmt.Println(recorder.Code)
-				require.Equal(t, http.StatusNotFound, recorder.Code)
+				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
 		},
 	}

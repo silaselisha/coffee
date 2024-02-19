@@ -169,13 +169,8 @@ func genObjectToken() (string, error) {
 	return fmt.Sprintf("%x", buff), nil
 }
 
-func ResetToken(expire int32) (token string, timestamp int64, err error) {
-	token, err = genObjectToken()
-	if err != nil {
-		return 
-	}
-
+func ResetToken(expire int32) (timestamp int64) {
 	duration := time.Minute * time.Duration(int(expire))
 	expiryTime := time.Now().Add(duration)
-	return token, expiryTime.Local().UnixMilli(), nil
+	return expiryTime.Local().UnixMilli()
 }
