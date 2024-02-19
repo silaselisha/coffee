@@ -12,6 +12,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/spf13/viper"
@@ -88,12 +89,13 @@ func CreateNewProduct() store.Item {
 	return product
 }
 
-func CreateNewUser() store.User {
+func CreateNewUser(email, name, phoneNumber, role string) store.User {
 	user := store.User{
-		UserName:    "al3xa",
-		Email:       "al3xa@aws.ac.ch",
+		UserName:    name,
+		Email:       email,
 		Password:    "abstarct&87",
-		PhoneNumber: "+1(571)360-6677",
+		Role:        role,
+		PhoneNumber: phoneNumber,
 	}
 	return user
 }
@@ -115,7 +117,7 @@ func ImageResizeProcessor(ctx context.Context, file multipart.File) ([]byte, str
 		return nil, "", fmt.Errorf("wrong file upload, only images required")
 	}
 
-	imageId, err := genS3ObjectNames()
+	imageId, err := genObjectToken()
 	if err != nil {
 		return nil, "", fmt.Errorf("error generating imageid")
 	}
@@ -158,11 +160,17 @@ func ComparePasswordEncryption(password, comparePassword string) bool {
 	return hash == comparePassword
 }
 
-func genS3ObjectNames() (string, error) {
+func genObjectToken() (string, error) {
 	buff := make([]byte, 16)
 	_, err := rand.Read(buff)
 	if err != nil {
 		return "", fmt.Errorf("error generating random bytes %w", err)
 	}
 	return fmt.Sprintf("%x", buff), nil
+}
+
+func ResetToken(expire int32) (timestamp int64) {
+	duration := time.Minute * time.Duration(int(expire))
+	expiryTime := time.Now().Add(duration)
+	return expiryTime.Local().UnixMilli()
 }

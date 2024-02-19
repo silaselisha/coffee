@@ -58,7 +58,18 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	}
 
 	jwtToken := token.NewToken(s.envs.SecretAccessKey)
-	token, err := jwtToken.CreateToken(ctx, 90*time.Second, user.Id.Hex(), user.Email)
+	days, err := strconv.Atoi(s.envs.JwtExpiresAt)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	hrs := fmt.Sprintf("%dh", (days * 24))
+	duration, err := time.ParseDuration(hrs)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	token, err := jwtToken.CreateToken(ctx, duration, user.Id.Hex(), user.Email)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -111,12 +122,17 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	jwtoken := token.NewToken(s.envs.SecretAccessKey)
-	minutes, err := strconv.Atoi(s.envs.JwtExpiresAt)
+	days, err := strconv.Atoi(s.envs.JwtExpiresAt)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	duration := time.Minute * time.Duration(minutes)
+	hrs := fmt.Sprintf("%dh", (days * 24))
+	duration, err := time.ParseDuration(hrs)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
 	token, err := jwtoken.CreateToken(ctx, duration, data.Id.Hex(), data.Email)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
@@ -138,16 +154,16 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 	collection := s.db.Collection(ctx, "coffeeshop", "users")
 
 	var users store.UserList
-	cur, err := collection.Find(ctx, bson.D{{}})
+	curr, err := collection.Find(ctx, bson.D{{}})
 	if err != nil {
 		log.Print(err)
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	defer cur.Close(ctx)
-	for cur.Next(ctx) {
+	defer curr.Close(ctx)
+	for curr.Next(ctx) {
 		var user store.User
-		err := cur.Decode(&user)
+		err := curr.Decode(&user)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				break
@@ -174,35 +190,37 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	collection := s.db.Collection(ctx, "coffeeshop", "users")
 
 	params := mux.Vars(r)
-
 	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
-	payload := ctx.Value(middleware.AuthUser).(*token.Payload)
-	if payload.Id != id.Hex() {
+	payload := ctx.Value(middleware.AuthPayloadKey{}).(*token.Payload)
+	role := ctx.Value(middleware.AuthRoleKey{}).(string)
+
+	if payload.Id != id.Hex() && role != "admin" {
 		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
 	}
 
-	result := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
+	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
-	err = result.Decode(&user)
+	err = curr.Decode(&user)
+	fmt.Println(err)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, "idocument not found", http.StatusNotFound)
+			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
 		}
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	res := struct {
+	result := struct {
 		Status string
 		Data   store.User
 	}{
 		Status: "sucess",
 		Data:   user,
 	}
-	return util.ResponseHandler(w, res, http.StatusOK)
+	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -215,7 +233,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthUser).(*token.Payload)
+	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
@@ -307,7 +325,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthUser).(*token.Payload)
+	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
@@ -324,22 +342,148 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 
+func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+
+	var forgotPassword forgotPasswordParams
+	forgotPasswordBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+	err = json.Unmarshal(forgotPasswordBytes, &forgotPassword)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusBadRequest)
+	}
+
+	var user store.User
+	curr := collection.FindOne(ctx, bson.D{{Key: "email", Value: forgotPassword.Email}})
+	err = curr.Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, err.Error(), http.StatusNotFound)
+		}
+
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	timestamp := util.ResetToken(60)
+	url := fmt.Sprintf("http://localhost:3000/resetpassword?token=%s&timestamp=%d", user.Id.Hex(), timestamp)
+
+	result := struct {
+		Status  string
+		Message string
+		Data    string
+	}{
+		Status:  "success",
+		Message: "URL to reset your password sent to your email",
+		Data:    url,
+	}
+
+	return util.ResponseHandler(w, result, http.StatusOK)
+}
+
+func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+
+	queries := r.URL.Query()
+	token := queries["token"][0]
+	timestampStr := queries["timestamp"][0]
+
+	timestamp, err := strconv.Atoi(timestampStr)
+	if err != nil {
+		err = fmt.Errorf("invalid URL reset timestamp %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	isURLValid := time.Now().After(time.UnixMilli(int64(timestamp)))
+	if isURLValid {
+		fmt.Println(isURLValid)
+		err = fmt.Errorf("expired URL reset token, kindly request for a new password reset token")
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	id, err := primitive.ObjectIDFromHex(token)
+	if err != nil {
+		err = fmt.Errorf("invalid URL reset token %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	var passwordRest passwordResetParams
+	passwordRestBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		err = fmt.Errorf("invalid data for password rset %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	err = json.Unmarshal(passwordRestBytes, &passwordRest)
+	if err != nil {
+		err = fmt.Errorf("invalid data for password rset %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	var user store.User
+	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
+	err = curr.Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, err, http.StatusNotFound)
+		}
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	if util.ComparePasswordEncryption(passwordRest.Password, user.Password) {
+		err = fmt.Errorf("provide a new password that you've never used before")
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	password := util.PasswordEncryption([]byte(passwordRest.Password))
+	updatedAt := time.Now()
+	passwordChangedAt := time.Now()
+
+	update := bson.D{{Key: "$set", Value: bson.D{{Key: "password", Value: password}, {Key: "updated_at", Value: updatedAt}, {Key: "password_changed_at", Value: passwordChangedAt}}}}
+
+	err = collection.FindOneAndUpdate(ctx, bson.D{{Key: "_id", Value: id}}, update).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, err, http.StatusNotFound)
+		}
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
+	result := struct{
+		Status string
+	}{
+		Status: "success",
+	}
+	return util.ResponseHandler(w, result, http.StatusPermanentRedirect)
+}
+
 func userRoutes(gmux *mux.Router, srv *Server) {
-	getUserRouter := gmux.Methods(http.MethodGet).Subrouter()
+	getUsersRouter := gmux.Methods(http.MethodGet).Subrouter()
 	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
+	forgotPasswordRouter := gmux.Methods(http.MethodPost).Subrouter()
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
+	resetPasswordRouter := gmux.Methods(http.MethodPut).Subrouter()
 	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
-	getUserRouter.Use(middleware.AuthMiddleware(srv.token))
+	getUsersRouter.Use(middleware.AuthMiddleware(srv.token))
 
-	getUserRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
-	getUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
-	postUserRouter.HandleFunc("/users/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
-	postUserRouter.HandleFunc("/users/login", util.HandleFuncDecorator(srv.LoginUserHandler))
+	getAllUsersRouter := getUsersRouter.PathPrefix("/").Subrouter()
+	getAllUsersRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin"))
+	getAllUsersRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
+
+	getUserByIdRouter := getUsersRouter.PathPrefix("/").Subrouter()
+	getUserByIdRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin", "user"))
+	getUserByIdRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
+
+	postUserRouter.HandleFunc("/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
+	postUserRouter.HandleFunc("/login", util.HandleFuncDecorator(srv.LoginUserHandler))
 
 	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
 	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 
 	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
 	deleteUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.DeleteUserByIdHandler))
+	forgotPasswordRouter.HandleFunc("/forgotpassword", util.HandleFuncDecorator(srv.ForgotPasswordHandler))
+	resetPasswordRouter.HandleFunc("/resetpassword", util.HandleFuncDecorator(srv.ResetPasswordHandler))
 }

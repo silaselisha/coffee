@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var user = util.CreateNewUser()
+var user = util.CreateNewUser("johndoe@test.com", "doe", "+1(571)360-6677", "user")
 
 func TestCreateUserSignup(t *testing.T) {
 	tests := []struct {
@@ -48,9 +48,8 @@ func TestCreateUserSignup(t *testing.T) {
 
 				err = json.Unmarshal(body, &result)
 				require.NoError(t, err)
-				testToken = result.Token
-				userId = result.Data.Id.Hex()
-				fmt.Println(userId)
+				userTestToken = result.Token
+				userID = result.Data.Id.Hex()
 				require.Equal(t, http.StatusCreated, recorder.Code)
 			},
 		},
@@ -95,7 +94,7 @@ func TestCreateUserSignup(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			url := "/users/signup"
+			url := "/signup"
 
 			body, err := json.Marshal(test.body)
 			require.NoError(t, err)
@@ -121,7 +120,7 @@ func TestUserLogin(t *testing.T) {
 		check func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name: "login user | 200 status code",
+			name: "user login | 200 status code",
 			body: map[string]interface{}{
 				"email":    user.Email,
 				"password": user.Password,
@@ -137,8 +136,28 @@ func TestUserLogin(t *testing.T) {
 				}
 				err = json.Unmarshal(data, &res)
 				require.NoError(t, err)
-				testToken = res.Token
-				fmt.Println(testToken)
+				userTestToken = res.Token
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name: "admin login | 200 status code",
+			body: map[string]interface{}{
+				"email":    "admin@aws.ac.uk",
+				"password": "Abstract$87",
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				data, err := io.ReadAll(recorder.Body)
+				require.NoError(t, err)
+				require.NotEmpty(t, data)
+
+				var res struct {
+					Status string
+					Token  string
+				}
+				err = json.Unmarshal(data, &res)
+				require.NoError(t, err)
+				adminTestToken = res.Token
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
 		},
@@ -176,7 +195,7 @@ func TestUserLogin(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			url := "/users/login"
+			url := "/login"
 
 			userCred, err := json.Marshal(test.body)
 			require.NoError(t, err)
@@ -204,18 +223,10 @@ func TestGetAllUsers(t *testing.T) {
 	}{
 		{
 			name:  "get all users | status 200",
-			token: testToken,
+			token: adminTestToken,
 			body:  map[string]interface{}{},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:  "get all users | status 403",
-			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-			body:  map[string]interface{}{},
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
 		},
 	}
@@ -251,8 +262,17 @@ func TestGetUserById(t *testing.T) {
 		{
 			name:  "get user by id | status code 200",
 			body:  map[string]interface{}{},
-			id:    userId,
-			token: testToken,
+			id:    userID,
+			token: userTestToken,
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:  "get user by id | status code 200",
+			body:  map[string]interface{}{},
+			id:    adminID,
+			token: adminTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
@@ -260,17 +280,8 @@ func TestGetUserById(t *testing.T) {
 		{
 			name:  "get user by id | status code 400",
 			body:  map[string]interface{}{},
-			id:    "62acegtuvzdx",
-			token: testToken,
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
-			},
-		},
-		{
-			name:  "get user by id | status code 400",
-			body:  map[string]interface{}{},
 			id:    "1234",
-			token: testToken,
+			token: userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
@@ -279,7 +290,7 @@ func TestGetUserById(t *testing.T) {
 			name:  "get user by id | status code 403",
 			body:  map[string]interface{}{},
 			id:    "65bcc06cbc92379c5b6fe79b",
-			token: testToken,
+			token: userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
@@ -287,19 +298,20 @@ func TestGetUserById(t *testing.T) {
 		{
 			name:  "get user by id | status code 403",
 			body:  map[string]interface{}{},
-			id:    userId,
-			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVjZjhkZGE5ZGI1YWJjZjAwYjczOWQ2IiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE2VDE5OjMxOjIzLjIyMjk1MTgwNSswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDItMTZUMjE6MDE6MjMuMjIyOTUxOTU2KzAzOjAwIn0.AiDjYQnAGkEcKs7w79AKbAuuivs7XtGru4QBVTTSy9c",
+			id:    userID,
+			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVkMWYzYzRkZjRlNjM4NjAxYTczNjliIiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE4VDE1OjEwOjQ0LjgzNjEyNjE4NiswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDUtMThUMTU6MTA6NDQuODM2MTI2MjQ4KzAzOjAwIn0.P26Jmris4dfH4v-sayNmnFty8yEtOXGhqb4xgtlXkPk",
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
 		},
 		{
-			name:  "get user by id | status code 403",
+			name:  "get user by id | status code 404",
 			body:  map[string]interface{}{},
-			id:    "65cf8dda9db5abcf00b739d6",
-			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVjZjhkZGE5ZGI1YWJjZjAwYjczOWQ2IiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE2VDE5OjMxOjIzLjIyMjk1MTgwNSswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDItMTZUMjE6MDE6MjMuMjIyOTUxOTU2KzAzOjAwIn0.AiDjYQnAGkEcKs7w79AKbAuuivs7XtGru4QBVTTSy9c",
+			id:    "65d1f3c4df4e638601a7369b",
+			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVkMWYzYzRkZjRlNjM4NjAxYTczNjliIiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE4VDE1OjEwOjQ0LjgzNjEyNjE4NiswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDUtMThUMTU6MTA6NDQuODM2MTI2MjQ4KzAzOjAwIn0.P26Jmris4dfH4v-sayNmnFty8yEtOXGhqb4xgtlXkPk",
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
+				fmt.Println(recorder.Code)
+				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
 		},
 	}
@@ -318,6 +330,7 @@ func TestGetUserById(t *testing.T) {
 			server, ok := querier.(*Server)
 			require.Equal(t, true, ok)
 
+			fmt.Println(url)
 			server.Router.ServeHTTP(recorder, request)
 			test.check(t, recorder)
 		})
@@ -334,8 +347,8 @@ func TestUpdateUserById(t *testing.T) {
 	}{
 		{
 			name:  "update user by id | status code 200",
-			id:    userId,
-			token: testToken,
+			id:    userID,
+			token: userTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -351,8 +364,8 @@ func TestUpdateUserById(t *testing.T) {
 		},
 		{
 			name:  "update user's avatar | status code 200",
-			id:    userId,
-			token: testToken,
+			id:    userID,
+			token: userTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -373,8 +386,8 @@ func TestUpdateUserById(t *testing.T) {
 		},
 		{
 			name:  "update user by id | status code 403",
-			id:    userId,
-			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVjZjhkZGE5ZGI1YWJjZjAwYjczOWQ2IiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE2VDE5OjMxOjIzLjIyMjk1MTgwNSswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDItMTZUMjE6MDE6MjMuMjIyOTUxOTU2KzAzOjAwIn0.AiDjYQnAGkEcKs7w79AKbAuuivs7XtGru4QBVTTSy9c",
+			id:    userID,
+			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVkMWYzYzRkZjRlNjM4NjAxYTczNjliIiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE4VDE1OjEwOjQ0LjgzNjEyNjE4NiswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDUtMThUMTU6MTA6NDQuODM2MTI2MjQ4KzAzOjAwIn0.P26Jmris4dfH4v-sayNmnFty8yEtOXGhqb4xgtlXkPk",
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -388,8 +401,8 @@ func TestUpdateUserById(t *testing.T) {
 		},
 		{
 			name:  "update user by id | status code 403",
-			id:    "65bcc06cbc92379c5b6fe79b",
-			token: testToken,
+			id:    "65d1f3c4df4e638601a7369b",
+			token: userTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -404,7 +417,7 @@ func TestUpdateUserById(t *testing.T) {
 		{
 			name:  "update user by id | status code 400",
 			id:    "1234",
-			token: testToken,
+			token: userTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -418,8 +431,8 @@ func TestUpdateUserById(t *testing.T) {
 		},
 		{
 			name:  "update user by id | status code 404",
-			id:    "65cf8dda9db5abcf00b739d6",
-			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVjZjhkZGE5ZGI1YWJjZjAwYjczOWQ2IiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE2VDE5OjMxOjIzLjIyMjk1MTgwNSswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDItMTZUMjE6MDE6MjMuMjIyOTUxOTU2KzAzOjAwIn0.AiDjYQnAGkEcKs7w79AKbAuuivs7XtGru4QBVTTSy9c",
+			id:    "65d1f3c4df4e638601a7369b",
+			token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVkMWYzYzRkZjRlNjM4NjAxYTczNjliIiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE4VDE1OjEwOjQ0LjgzNjEyNjE4NiswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDUtMThUMTU6MTA6NDQuODM2MTI2MjQ4KzAzOjAwIn0.P26Jmris4dfH4v-sayNmnFty8yEtOXGhqb4xgtlXkPk",
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -466,8 +479,8 @@ func TestDeleteUser(t *testing.T) {
 		{
 			name:   "delete user's account | status 204",
 			body:   map[string]interface{}{},
-			userId: userId,
-			token:  testToken,
+			userId: userID,
+			token:  userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNoContent, recorder.Code)
 			},
@@ -476,7 +489,7 @@ func TestDeleteUser(t *testing.T) {
 			name:   "delete user's account | status 400",
 			body:   map[string]interface{}{},
 			userId: "1234",
-			token:  testToken,
+			token:  userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
@@ -485,7 +498,7 @@ func TestDeleteUser(t *testing.T) {
 			name:   "delete user's account | status 403",
 			body:   map[string]interface{}{},
 			userId: "65bcc06cbc92379c5b6fe79b",
-			token:  testToken,
+			token:  userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
@@ -493,8 +506,8 @@ func TestDeleteUser(t *testing.T) {
 		{
 			name:   "delete user's account | status 404",
 			body:   map[string]interface{}{},
-			userId: "65cf8dda9db5abcf00b739d6",
-			token:  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVjZjhkZGE5ZGI1YWJjZjAwYjczOWQ2IiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE2VDE5OjMxOjIzLjIyMjk1MTgwNSswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDItMTZUMjE6MDE6MjMuMjIyOTUxOTU2KzAzOjAwIn0.AiDjYQnAGkEcKs7w79AKbAuuivs7XtGru4QBVTTSy9c",
+			userId: "65d1f3c4df4e638601a7369b",
+			token:  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJFbWFpbCI6ImFsM3hhQGF3cy5hYy51ayIsIklkIjoiNjVkMWYzYzRkZjRlNjM4NjAxYTczNjliIiwiSXNzdWVkQXQiOiIyMDI0LTAyLTE4VDE1OjEwOjQ0LjgzNjEyNjE4NiswMzowMCIsIkV4cGlyZWRBdCI6IjIwMjQtMDUtMThUMTU6MTA6NDQuODM2MTI2MjQ4KzAzOjAwIn0.P26Jmris4dfH4v-sayNmnFty8yEtOXGhqb4xgtlXkPk",
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},

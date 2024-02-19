@@ -2,13 +2,19 @@ package middleware
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-var AuthUser struct{} = struct{}{}
+type AuthPayloadKey struct{}
+type AuthRoleKey struct{}
 
 func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -36,7 +42,64 @@ func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), AuthUser, payload)
+			ctx := context.WithValue(r.Context(), AuthPayloadKey{}, payload)
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var isAuthorized bool
+			var authorized map[string]string = map[string]string{}
+			roles := map[string]string{
+				"admin": "admin",
+				"user":  "user",
+			}
+
+			for _, role := range args {
+				_, ok := roles[role]
+				if ok {
+					isAuthorized = true
+					authorized[role] = role
+				}
+			}
+
+			if !isAuthorized {
+				err := errors.New("user forbidden to perform an operation on this resource 1")
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+
+			payload := r.Context().Value(AuthPayloadKey{}).(*token.Payload)
+			var user store.User
+			collection := str.Collection(r.Context(), "coffeeshop", "users")
+			id, err := primitive.ObjectIDFromHex(payload.Id)
+			if err != nil {
+				err := errors.New("user forbidden to perform an operation on this resource")
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+			curr := collection.FindOne(r.Context(), bson.D{{Key: "_id", Value: id}})
+
+			err = curr.Decode(&user)
+			if err != nil {
+				fmt.Println(err)
+				err := errors.New("user forbidden to perform an operation on this resource")
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+
+			role, ok := authorized[user.Role]
+			if !ok {
+				err := errors.New("user forbidden to perform an operation on this resource")
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+			
+			ctx := context.WithValue(r.Context(), AuthRoleKey{}, role)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})

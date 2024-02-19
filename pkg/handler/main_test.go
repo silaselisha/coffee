@@ -14,9 +14,11 @@ import (
 
 var mongoClient *mongo.Client
 var product store.Item
-var productId string
-var userId string
-var testToken string
+var productID string
+var userID string
+var userTestToken string
+var adminID string
+var adminTestToken string
 
 func TestMain(m *testing.M) {
 	fmt.Println("RUNNING")
@@ -30,6 +32,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	adminID = "65d24b2df041357fe87113bc"
 
 	product = util.CreateNewProduct()
 	os.Exit(m.Run())
