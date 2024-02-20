@@ -1,11 +1,8 @@
-// User services
-// implementation SSO, socials signup & signin and traditional
-// user signup & login
-// cookie session management and refresh tokens
-// password reset functionality; forgot apssword?
-// account update info functionality [Avatar, PhoneNumber, Password]
-// deactivate account and set for permanet deletion 30day without login
-// delete account with all it's associated data
+// delete account and it's s3 object
+// updating user profile image then delete the exisitng one
+// resize the image (research)
+// email user code URL for verification, reset password
+// create a path to verify phone number
 package handler
 
 import (
@@ -421,8 +418,14 @@ func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
+	password := util.PasswordEncryption([]byte(passwordRest.Password))
+	updatedAt := time.Now()
+	passwordChangedAt := time.Now()
+
+	update := bson.D{{Key: "$set", Value: bson.D{{Key: "password", Value: password}, {Key: "updated_at", Value: updatedAt}, {Key: "password_changed_at", Value: passwordChangedAt}}}}
+
 	var user store.User
-	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
+	curr := collection.FindOneAndUpdate(ctx, bson.D{{Key: "_id", Value: id}}, update)
 	err = curr.Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -431,31 +434,57 @@ func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	if util.ComparePasswordEncryption(passwordRest.Password, user.Password) {
-		err = fmt.Errorf("provide a new password that you've never used before")
-		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
-	}
-
-	password := util.PasswordEncryption([]byte(passwordRest.Password))
-	updatedAt := time.Now()
-	passwordChangedAt := time.Now()
-
-	update := bson.D{{Key: "$set", Value: bson.D{{Key: "password", Value: password}, {Key: "updated_at", Value: updatedAt}, {Key: "password_changed_at", Value: passwordChangedAt}}}}
-
-	err = collection.FindOneAndUpdate(ctx, bson.D{{Key: "_id", Value: id}}, update).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, err, http.StatusNotFound)
-		}
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	result := struct{
+	result := struct {
 		Status string
 	}{
 		Status: "success",
 	}
 	return util.ResponseHandler(w, result, http.StatusPermanentRedirect)
+}
+
+func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	queries := r.URL.Query()
+	token := queries["token"][0]
+	timestamp := queries["timestamp"][0]
+
+	id, err := primitive.ObjectIDFromHex(token)
+	if err != nil {
+		err = fmt.Errorf("invalid account id %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	mill, err := strconv.Atoi(timestamp)
+	if err != nil {
+		err = fmt.Errorf("invalid timestamp %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	if time.Now().After(time.UnixMilli(int64(mill))) {
+		err = fmt.Errorf("invalid timestamp expired %w", err)
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+
+	var user store.User
+	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	update := bson.D{{Key: "$set", Value: bson.D{{Key: "verified", Value: true}, {Key: "updated_at", Value: time.Now()}}}}
+	curr := collection.FindOneAndUpdate(ctx, bson.D{{Key: "_id", Value: id}}, update)
+	err = curr.Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			err = fmt.Errorf("document not found %w", err)
+			return util.ResponseHandler(w, err.Error(), http.StatusNotFound)
+		}
+		return util.ResponseHandler(w, "", http.StatusInternalServerError)
+	}
+
+	result := struct {
+		Status  string
+		Message string
+	}{
+		Status:  "success",
+		Message: "account verified",
+	}
+	return util.ResponseHandler(w, result, http.StatusOK)
 }
 
 func userRoutes(gmux *mux.Router, srv *Server) {

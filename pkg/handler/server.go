@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
+	"github.com/redis/go-redis/v9"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/pkg/util"
@@ -18,9 +19,10 @@ type Server struct {
 	vd     *validator.Validate
 	envs   *util.Config
 	token  token.Token
+	RDB    *redis.Client
 }
 
-func NewServer(ctx context.Context, client *mongo.Client) store.Querier {
+func NewServer(ctx context.Context, mongoClient *mongo.Client) store.Querier {
 	server := &Server{}
 
 	envs, err := util.LoadEnvs("./../../")
@@ -29,7 +31,7 @@ func NewServer(ctx context.Context, client *mongo.Client) store.Querier {
 	}
 
 	tkn := token.NewToken(envs.SecretAccessKey)
-	store := store.NewMongoClient(client)
+	store := store.NewMongoClient(mongoClient)
 	server.db = store
 	server.envs = envs
 	server.token = tkn
