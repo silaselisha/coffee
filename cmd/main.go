@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -17,23 +18,25 @@ func main() {
 		log.Panic(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	
-	client, err := util.Connect(ctx, config.DBUri)
+
+	mongo_client, err := util.Connect(ctx, config.DBUri)
 	if err != nil {
 		log.Panic(err)
 	}
 
 	defer func() {
-		if err := client.Disconnect(ctx); err != nil {
+		if err := mongo_client.Disconnect(ctx); err != nil {
 			log.Panic(err)
 		}
 	}()
-	server := handler.NewServer(ctx, client)
-	router := server.(*handler.Server)
 
-	err = http.ListenAndServe(config.ServerAddrs, router.Router)
+	querier := handler.NewServer(ctx, mongo_client)
+	server := querier.(*handler.Server)
+
+	fmt.Println(server.RDB)
+	err = http.ListenAndServe(config.ServerAddrs, server.Router)
 	if err != nil {
 		logrus.Fatal(err)
 	}
