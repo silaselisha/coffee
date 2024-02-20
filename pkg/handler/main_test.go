@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 
-	mongoClient, err = util.Connect(context.Background(), envs.DBUri)
+	mongoClient, err = util.Connect(context.Background(), envs.DB_URI)
 	if err != nil {
 		log.Fatal(err)
 	}

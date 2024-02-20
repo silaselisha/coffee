@@ -54,8 +54,8 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 		return util.ResponseHandler(w, "invalid email or password", http.StatusBadRequest)
 	}
 
-	jwtToken := token.NewToken(s.envs.SecretAccessKey)
-	days, err := strconv.Atoi(s.envs.JwtExpiresAt)
+	jwtToken := token.NewToken(s.envs.SECRET_ACCESS_KEY)
+	days, err := strconv.Atoi(s.envs.JWT_EXPIRES_AT)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -118,8 +118,8 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	jwtoken := token.NewToken(s.envs.SecretAccessKey)
-	days, err := strconv.Atoi(s.envs.JwtExpiresAt)
+	jwtoken := token.NewToken(s.envs.SECRET_ACCESS_KEY)
+	days, err := strconv.Atoi(s.envs.JWT_EXPIRES_AT)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}

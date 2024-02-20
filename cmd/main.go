@@ -21,7 +21,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	mongo_client, err := util.Connect(ctx, config.DBUri)
+	fmt.Println(config.DB_URI)
+	fmt.Println(config.SERVER_ADDRESS)
+	fmt.Println("http://localhost:3000")
+	mongo_client, err := util.Connect(ctx, config.DB_URI)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -35,8 +38,7 @@ func main() {
 	querier := handler.NewServer(ctx, mongo_client)
 	server := querier.(*handler.Server)
 
-	fmt.Println(server.RDB)
-	err = http.ListenAndServe(config.ServerAddrs, server.Router)
+	err = http.ListenAndServe(config.SERVER_ADDRESS, server.Router)
 	if err != nil {
 		logrus.Fatal(err)
 	}
