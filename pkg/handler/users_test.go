@@ -103,7 +103,7 @@ func TestCreateUserSignup(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 
-			querier := NewServer(ctx, mongoClient)
+			querier := NewServer(ctx, mongoClient, distributor)
 			server, ok := querier.(*Server)
 			require.Equal(t, true, ok)
 
@@ -204,7 +204,7 @@ func TestUserLogin(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(userCred))
 			recorder := httptest.NewRecorder()
 
-			querier := NewServer(ctx, mongoClient)
+			querier := NewServer(ctx, mongoClient, distributor)
 			server, ok := querier.(*Server)
 			require.Equal(t, true, ok)
 
@@ -241,7 +241,7 @@ func TestGetAllUsers(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, url, nil)
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", test.token))
 
-			querier := NewServer(ctx, mongoClient)
+			querier := NewServer(ctx, mongoClient, distributor)
 			server, ok := querier.(*Server)
 			require.Equal(t, true, ok)
 
@@ -326,7 +326,7 @@ func TestGetUserById(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", test.token))
 
-			querier := NewServer(ctx, mongoClient)
+			querier := NewServer(ctx, mongoClient, distributor)
 			server, ok := querier.(*Server)
 			require.Equal(t, true, ok)
 
@@ -458,7 +458,7 @@ func TestUpdateUserById(t *testing.T) {
 		request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 		request.Header.Set("authorization", fmt.Sprintf("Bearer %s", test.token))
 
-		querier := NewServer(ctx, mongoClient)
+		querier := NewServer(ctx, mongoClient, distributor)
 		server, ok := querier.(*Server)
 		require.Equal(t, true, ok)
 
@@ -524,7 +524,7 @@ func TestDeleteUser(t *testing.T) {
 			request := httptest.NewRequest(http.MethodDelete, url, nil)
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", test.token))
 
-			querier := NewServer(ctx, mongoClient)
+			querier := NewServer(ctx, mongoClient, distributor)
 			server, ok := querier.(*Server)
 			require.Equal(t, true, ok)
 

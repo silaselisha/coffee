@@ -25,14 +25,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-type Config struct {
-	DBPassword      string `mapstructure:"DB_PASSWORD"`
-	DBUri           string `mapstructure:"DB_URI"`
-	ServerAddrs     string `mapstructure:"SERVER_ADDRESS"`
-	SecretAccessKey string `mapstructure:"SECRET_ACCESS_KEY"`
-	JwtExpiresAt    string `mapstructure:"JWT_EXPIRES_AT"`
-}
-
 func LoadEnvs(path string) (config *Config, err error) {
 	viper.AddConfigPath(path)
 	viper.SetConfigName(".env")
@@ -174,3 +166,5 @@ func ResetToken(expire int32) (timestamp int64) {
 	expiryTime := time.Now().Add(duration)
 	return expiryTime.Local().UnixMilli()
 }
+
+
