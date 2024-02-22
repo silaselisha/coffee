@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/silaselisha/coffee-api/pkg/store"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type PayloadSendMail struct {
@@ -30,5 +33,29 @@ func (distributor *RedisTaskClientDistributor) SendMailTask(ctx context.Context,
 	}
 
 	fmt.Println(info)
+	return nil
+}
+
+func (processor *RedisTaskServerProcessor) ProcessTaskSendMail(ctx context.Context, task *asynq.Task) error {
+	var Payload PayloadSendMail
+	err := json.Unmarshal(task.Payload(), &Payload)
+	if err != nil {
+		fmt.Print(time.Now())
+		return fmt.Errorf("unmarshalling error %w", err)
+	}
+
+	var user store.User
+	users := processor.store.Collection(ctx, "coffeeshop", "users")
+	curr := users.FindOne(ctx, bson.D{{Key: "email", Value: Payload.Email}})
+	err = curr.Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			fmt.Print(time.Now())
+			return fmt.Errorf("document not found %w", err)
+		}
+		return fmt.Errorf("internal server error %w", err)
+	}
+
+	fmt.Printf("processing %s at %v\n", task.Type(), time.Now())
 	return nil
 }
