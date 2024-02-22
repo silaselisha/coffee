@@ -166,5 +166,3 @@ func ResetToken(expire int32) (timestamp int64) {
 	expiryTime := time.Now().Add(duration)
 	return expiryTime.Local().UnixMilli()
 }
-
-

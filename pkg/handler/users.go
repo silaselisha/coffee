@@ -125,7 +125,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		asynq.ProcessIn(1 * time.Minute),
 		asynq.Queue(workers.CriticalQueue),
 	}
-	err = s.distributor.SendMailTask(ctx, &workers.PayloadSendMail{Email: data.Email}, opts...)
+	err = s.distributor.SendVerificationMailTask(ctx, &workers.PayloadSendMail{Email: data.Email}, opts...)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -375,8 +375,15 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	timestamp := util.ResetToken(60)
-	url := fmt.Sprintf("http://localhost:3000/resetpassword?token=%s&timestamp=%d", user.Id.Hex(), timestamp)
+	opts := []asynq.Option{
+		asynq.ProcessIn(1 * time.Minute),
+		asynq.MaxRetry(10),
+		asynq.Queue("critical"),
+	}
+	err = s.distributor.SendPasswordResetMailTask(ctx, &workers.PayloadSendMail{Email: user.Email}, opts...)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
 
 	result := struct {
 		Status  string
@@ -385,7 +392,6 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 	}{
 		Status:  "success",
 		Message: "URL to reset your password sent to your email",
-		Data:    url,
 	}
 
 	return util.ResponseHandler(w, result, http.StatusOK)
