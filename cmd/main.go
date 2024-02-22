@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	config, err := util.LoadEnvs("./..")
+	envs, err := util.LoadEnvs("./..")
 	if err != nil {
 		log.Panic(err)
 		return
@@ -24,7 +24,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	mongo_client, err := util.Connect(ctx, config.DB_URI)
+	mongo_client, err := util.Connect(ctx, envs.DB_URI)
 	if err != nil {
 		log.Panic(err)
 		return
@@ -38,23 +38,23 @@ func main() {
 	}()
 
 	redisOpts := asynq.RedisClientOpt{
-		Addr: config.REDIS_SERVER_ADDRESS,
+		Addr: envs.REDIS_SERVER_ADDRESS,
 	}
 
 	distributor := workers.NewTaskClientDistributor(redisOpts)
 	querier := handler.NewServer(ctx, mongo_client, distributor)
 	server := querier.(*handler.Server)
-	go taskProcessor(redisOpts, server.Store)
+	go taskProcessor(redisOpts, server.Store, *envs)
 
-	err = http.ListenAndServe(config.SERVER_ADDRESS, server.Router)
+	err = http.ListenAndServe(envs.SERVER_ADDRESS, server.Router)
 	if err != nil {
 		log.Panic()
 		return
 	}
 }
 
-func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo) {
-	processor := workers.NewTaskServerProcessor(opts, store)
+func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs util.Config) {
+	processor := workers.NewTaskServerProcessor(opts, store, envs)
 	log.Print("worker process on")
 	err := processor.Start()
 	if err != nil {
