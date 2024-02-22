@@ -7,17 +7,16 @@ import (
 )
 
 type TaskDistributor interface{
-	SendEmail(ctx context.Context, payload PayloadSendMail, opts ...asynq.Option) error
+	SendMailTask(ctx context.Context, payload *PayloadSendMail, opts ...asynq.Option) error
 }
 
-type RedisTaskDistributor struct {
-	clinet *asynq.Client
+type RedisTaskClientDistributor struct {
+	client *asynq.Client
 }
 
-func NewRedisTaskDistributor(opts asynq.RedisClientOpt) TaskDistributor{
+func NewTaskDistributor(opts asynq.RedisClientOpt) TaskDistributor {
 	client := asynq.NewClient(opts)
-	return &RedisTaskDistributor{
-		clinet: client,
+	return &RedisTaskClientDistributor{
+		client: client,
 	}
 }
-
