@@ -18,7 +18,7 @@ import (
 )
 
 func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "products")
+	collection := s.Store.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -76,7 +76,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 }
 
 func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "products")
+	collection := s.Store.Collection(ctx, "coffeeshop", "products")
 
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
@@ -108,7 +108,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 }
 
 func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "products")
+	collection := s.Store.Collection(ctx, "coffeeshop", "products")
 
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
@@ -139,7 +139,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 }
 
 func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "products")
+	collection := s.Store.Collection(ctx, "coffeeshop", "products")
 
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
@@ -161,7 +161,7 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 }
 
 func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "products")
+	collection := s.Store.Collection(ctx, "coffeeshop", "products")
 
 	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "name", Value: 1}},

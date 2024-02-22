@@ -17,10 +17,12 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/pkg/util"
+	"github.com/silaselisha/coffee-api/pkg/workers"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -41,7 +43,7 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	}
 
 	var user store.User
-	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 	curr := collection.FindOne(ctx, bson.D{{Key: "email", Value: credentials.Email}})
 	if err := curr.Decode(&user); err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -81,7 +83,7 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 }
 
 func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 	_, err := collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
 		{Keys: bson.D{{Key: "username", Value: 1}}, Options: options.Index().SetUnique(true)},
@@ -118,6 +120,16 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
+	opts := []asynq.Option{
+		asynq.MaxRetry(10),
+		asynq.ProcessIn(1 * time.Minute),
+		asynq.Queue(workers.CriticalQueue),
+	}
+	err = s.distributor.SendMailTask(ctx, &workers.PayloadSendMail{Email: data.Email}, opts...)
+	if err != nil {
+		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+	}
+
 	jwtoken := token.NewToken(s.envs.SECRET_ACCESS_KEY)
 	days, err := strconv.Atoi(s.envs.JWT_EXPIRES_AT)
 	if err != nil {
@@ -148,7 +160,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 }
 
 func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
 	var users store.UserList
 	curr, err := collection.Find(ctx, bson.D{{}})
@@ -184,7 +196,7 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 }
 
 func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
@@ -221,7 +233,7 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(r.Context(), "coffeeshop", "users")
+	collection := s.Store.Collection(r.Context(), "coffeeshop", "users")
 
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
@@ -314,7 +326,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 }
 
 func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
@@ -340,7 +352,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 }
 
 func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
 	var forgotPassword forgotPasswordParams
 	forgotPasswordBytes, err := io.ReadAll(r.Body)
@@ -380,7 +392,7 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 }
 
 func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
 	queries := r.URL.Query()
 	token := queries["token"][0]
@@ -465,7 +477,7 @@ func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	var user store.User
-	collection := s.db.Collection(ctx, "coffeeshop", "users")
+	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 	update := bson.D{{Key: "$set", Value: bson.D{{Key: "verified", Value: true}, {Key: "updated_at", Value: time.Now()}}}}
 	curr := collection.FindOneAndUpdate(ctx, bson.D{{Key: "_id", Value: id}}, update)
 	err = curr.Decode(&user)
@@ -498,11 +510,11 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	getUsersRouter.Use(middleware.AuthMiddleware(srv.token))
 
 	getAllUsersRouter := getUsersRouter.PathPrefix("/").Subrouter()
-	getAllUsersRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin"))
+	getAllUsersRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
 	getAllUsersRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
 
 	getUserByIdRouter := getUsersRouter.PathPrefix("/").Subrouter()
-	getUserByIdRouter.Use(middleware.RestrictToMiddleware(srv.db, "admin", "user"))
+	getUserByIdRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin", "user"))
 	getUserByIdRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
 
 	postUserRouter.HandleFunc("/signup", util.HandleFuncDecorator(srv.CreateUserHandler))

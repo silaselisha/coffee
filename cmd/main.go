@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/pkg/handler"
+	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/util"
+	"github.com/silaselisha/coffee-api/pkg/workers"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,9 +24,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	fmt.Println(config.DB_URI)
-	fmt.Println(config.SERVER_ADDRESS)
-	fmt.Println("http://localhost:3000")
 	mongo_client, err := util.Connect(ctx, config.DB_URI)
 	if err != nil {
 		log.Panic(err)
@@ -35,11 +35,26 @@ func main() {
 		}
 	}()
 
-	querier := handler.NewServer(ctx, mongo_client)
+	redisOpts := asynq.RedisClientOpt{
+		Addr: config.REDIS_SERVER_ADDRESS,
+	}
+
+	distributor := workers.NewTaskClientDistributor(redisOpts)
+	querier := handler.NewServer(ctx, mongo_client, distributor)
 	server := querier.(*handler.Server)
+	go taskProcessor(redisOpts, server.Store)
 
 	err = http.ListenAndServe(config.SERVER_ADDRESS, server.Router)
 	if err != nil {
 		logrus.Fatal(err)
+	}
+}
+
+func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo) {
+	processor := workers.NewTaskServerProcessor(opts, store)
+	fmt.Printf("worker process on go: @%v\n", time.Now())
+	err := processor.Start()
+	if err != nil {
+		log.Fatal(err)
 	}
 }

@@ -32,7 +32,7 @@ func (distributor *RedisTaskClientDistributor) SendMailTask(ctx context.Context,
 		return fmt.Errorf("enqueueing task error %w", err)
 	}
 
-	fmt.Println(info)
+	fmt.Printf("Enqueued task: %v of max retries: %v on payload: %v\n", info.Type, info.MaxRetry, string(info.Payload))
 	return nil
 }
 
@@ -58,4 +58,11 @@ func (processor *RedisTaskServerProcessor) ProcessTaskSendMail(ctx context.Conte
 
 	fmt.Printf("processing %s at %v\n", task.Type(), time.Now())
 	return nil
+}
+
+func (processor *RedisTaskServerProcessor) Start() error {
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(SEND_MAIL_TASK_KEY, processor.ProcessTaskSendMail)
+	
+	return processor.server.Start(mux)
 }

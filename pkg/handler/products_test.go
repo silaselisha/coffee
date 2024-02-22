@@ -141,7 +141,7 @@ func TestCreateProduct(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			server := NewServer(ctx, mongoClient)
+			server := NewServer(ctx, mongoClient, distributor)
 
 			url := "/products"
 			recorder := httptest.NewRecorder()
@@ -195,7 +195,7 @@ func TestUpdateProduct(t *testing.T) {
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 
-			querier := NewServer(ctx, mongoClient)
+			querier := NewServer(ctx, mongoClient, distributor)
 			server, ok := querier.(*Server)
 			require.Equal(t, true, ok)
 
@@ -222,7 +222,7 @@ func TestGetAllProduct(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			server := NewServer(ctx, mongoClient)
+			server := NewServer(ctx, mongoClient, distributor)
 
 			url := "/products"
 			recorder := httptest.NewRecorder()
@@ -283,7 +283,7 @@ func TestGetProduct(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			server := NewServer(ctx, mongoClient)
+			server := NewServer(ctx, mongoClient, distributor)
 
 			url := fmt.Sprintf("/products/%s/%s", test.category["category"], test.id)
 			recorder := httptest.NewRecorder()
@@ -332,7 +332,7 @@ func TestDeleteProduct(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			server := NewServer(ctx, mongoClient)
+			server := NewServer(ctx, mongoClient, distributor)
 
 			url := fmt.Sprintf("/products/%s", test.id)
 			fmt.Println(url)
