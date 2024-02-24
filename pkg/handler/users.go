@@ -13,7 +13,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -261,47 +260,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		}
 	}
 
-	if file, _, err := r.FormFile("avatar"); err == nil {
-		resultChannel := make(chan imageResultParams, 2)
-		var wg sync.WaitGroup
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			avatarFile, avatarName, err := util.ImageResizeProcessor(ctx, file)
-			if err != nil {
-				resultChannel <- imageResultParams{err: err}
-				return
-			}
-			log.Print("goroutine 1 ", time.Now())
-			resultChannel <- imageResultParams{avatarFile: avatarFile, avatarName: avatarName}
-		}()
-
-		wg.Add(1)
-		avatarURL := make(chan string)
-		go func(avatarData imageResultParams) {
-			defer wg.Done()
-
-			url, err := util.S3awsImageUpload(ctx, avatarData.avatarFile, "watamu-coffee-shop", avatarData.avatarName, "images/avatars")
-			fmt.Println(url)
-			if err != nil {
-				resultChannel <- imageResultParams{err: err}
-				return
-			}
-			avatarURL <- url
-			close(avatarURL)
-		}(<-resultChannel)
-
-		select {
-		case avatarName := <-avatarURL:
-			data["avatar"] = avatarName
-
-		case result := <-resultChannel:
-			if result.err != nil {
-				return util.ResponseHandler(w, err, http.StatusInternalServerError)
-			}
-		}
-	}
+	r.FormFile("avatar")
 
 	data["updated_at"] = time.Now()
 	filter := bson.D{{Key: "_id", Value: id}}
@@ -339,7 +298,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
 
-	var deletedDocument bson.M
+	var deletedDocument store.User
 	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&deletedDocument)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -348,6 +307,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
 	}
 
+	// avatarURL := deletedDocument.Avatar
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 

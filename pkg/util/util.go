@@ -1,17 +1,12 @@
 package util
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"mime/multipart"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/silaselisha/coffee-api/pkg/store"
@@ -19,10 +14,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 func LoadEnvs(path string) (config *Config, err error) {
@@ -92,57 +83,6 @@ func CreateNewUser(email, name, phoneNumber, role string) store.User {
 	return user
 }
 
-func ImageResizeProcessor(ctx context.Context, file multipart.File) ([]byte, string, error) {
-	imageBytes, err := io.ReadAll(file)
-	if err != nil {
-		if err == io.EOF {
-			return nil, "", fmt.Errorf("end of file error: %w", err)
-		}
-		return nil, "", err
-	}
-	defer file.Close()
-
-	contentType := strings.Split(http.DetectContentType(imageBytes), "/")[0]
-	ext := strings.Split(http.DetectContentType(imageBytes), "/")[1]
-	if contentType != "image" {
-		fmt.Println(contentType)
-		return nil, "", fmt.Errorf("wrong file upload, only images required")
-	}
-
-	imageId, err := genObjectToken()
-	if err != nil {
-		return nil, "", fmt.Errorf("error generating imageid")
-	}
-
-	imageName := fmt.Sprintf("%s.%s", imageId, ext)
-	return imageBytes, imageName, nil
-}
-
-func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string, resource string) (string, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("us-east-1"),
-	})
-	if err != nil {
-		return "", fmt.Errorf("aws session error %w", err)
-	}
-
-	objectKey = fmt.Sprintf("%s/%s", resource, objectKey)
-	uploader := s3manager.NewUploader(sess)
-	_, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(objectKey),
-		Body:   bytes.NewReader(imageByte),
-	})
-
-	if err != nil {
-		log.Print(err)
-		return "", err
-	}
-
-	avatarURL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucket, objectKey)
-	return avatarURL, nil
-}
-
 func PasswordEncryption(password []byte) string {
 	return fmt.Sprintf("%x", crypto.SHA256.New().Sum(password))
 }
@@ -152,7 +92,7 @@ func ComparePasswordEncryption(password, comparePassword string) bool {
 	return hash == comparePassword
 }
 
-func genObjectToken() (string, error) {
+func GenObjectToken() (string, error) {
 	buff := make([]byte, 16)
 	_, err := rand.Read(buff)
 	if err != nil {
