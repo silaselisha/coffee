@@ -185,13 +185,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return
 		}
 
-		_, fileName, err := util.ImageResizeProcessor(ctx, file)
-		if err != nil {
-			errs <- err
-			return
-		}
-
-		thumbnailName <- fileName
+		thumbnailName <- ""
 		close(thumbnailName)
 		defer file.Close()
 	}()
