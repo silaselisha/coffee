@@ -52,7 +52,7 @@ func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
 	return client, nil
 }
 
-func ResponseHandler(w http.ResponseWriter, message any, statusCode int) error {
+func ResponseHandler(w http.ResponseWriter, message interface{}, statusCode int) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 

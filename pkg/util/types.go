@@ -22,3 +22,4 @@ type Config struct {
 	REDIS_SERVER_PORT    string `mapstructure:"REDIS_SERVER_PORT"`
 	REDIS_SERVER_ADDRESS string `mapstructure:"REDIS_SERVER_ADDRESS"`
 }
+
