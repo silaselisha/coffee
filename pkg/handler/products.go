@@ -65,12 +65,27 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
+	product := itemResponseParams{
+		Id:          updatedDocument.Id.Hex(),
+		Images:      updatedDocument.Images,
+		Name:        updatedDocument.Name,
+		Price:       updatedDocument.Price,
+		Summary:     updatedDocument.Summary,
+		Category:    updatedDocument.Category,
+		Thumbnail:   updatedDocument.Thumbnail,
+		Description: updatedDocument.Description,
+		Ingridients: updatedDocument.Ingridients,
+		Ratings:     updatedDocument.Ratings,
+		CreatedAt:   updatedDocument.CreatedAt,
+		UpdatedAt:   updatedDocument.UpdatedAt,
+	}
+
 	result := struct {
-		Status string
-		Data   store.Item
+		Status string             `json:"status"`
+		Data   itemResponseParams `json:"data"`
 	}{
 		Status: "success",
-		Data:   updatedDocument,
+		Data:   product,
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
@@ -84,7 +99,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 	}
 	defer cur.Close(ctx)
 
-	var result store.ItemList
+	var result itemResponseListParams
 	for cur.Next(ctx) {
 		item := new(store.Item)
 		err := cur.Decode(&item)
@@ -92,13 +107,27 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 			return util.ResponseHandler(w, err, http.StatusInternalServerError)
 		}
 
-		result = append(result, *item)
+		product := itemResponseParams{
+			Id:          item.Id.Hex(),
+			Images:      item.Images,
+			Name:        item.Name,
+			Price:       item.Price,
+			Summary:     item.Summary,
+			Category:    item.Category,
+			Thumbnail:   item.Thumbnail,
+			Description: item.Description,
+			Ingridients: item.Ingridients,
+			Ratings:     item.Ratings,
+			CreatedAt:   item.CreatedAt,
+			UpdatedAt:   item.UpdatedAt,
+		}
+		result = append(result, product)
 	}
 
 	resp := struct {
-		Status  string
-		Results int32
-		Data    store.ItemList
+		Status  string                 `json:"status"`
+		Results int32                  `json:"results"`
+		Data    itemResponseListParams `json:"data"`
 	}{
 		Status:  "success",
 		Results: int32(len(result)),
@@ -128,12 +157,27 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
+	product := itemResponseParams{
+		Id:          item.Id.Hex(),
+		Images:      item.Images,
+		Name:        item.Name,
+		Price:       item.Price,
+		Summary:     item.Summary,
+		Category:    item.Category,
+		Thumbnail:   item.Thumbnail,
+		Description: item.Description,
+		Ingridients: item.Ingridients,
+		Ratings:     item.Ratings,
+		CreatedAt:   item.CreatedAt,
+		UpdatedAt:   item.UpdatedAt,
+	}
+
 	res := struct {
-		Status string
-		Data   store.Item
+		Status string             `json:"status"`
+		Data   itemResponseParams `json:"data"`
 	}{
 		Status: "success",
-		Data:   item,
+		Data:   product,
 	}
 	return util.ResponseHandler(w, res, http.StatusOK)
 }
@@ -230,8 +274,8 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	result := struct {
-		Status string
-		Data   store.Item
+		Status string     `json:"status"`
+		Data   store.Item `json:"data"`
 	}{
 		Status: "success",
 		Data:   item,

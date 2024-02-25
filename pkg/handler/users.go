@@ -72,8 +72,8 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 	res := struct {
-		Status string
-		Token  string
+		Status string `json:"status"`
+		Token  string `json:"token"`
 	}{
 		Status: "success",
 		Token:  token,
@@ -92,29 +92,29 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	var data store.User
+	var user store.User
 
 	userBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
-	err = json.Unmarshal(userBytes, &data)
+	err = json.Unmarshal(userBytes, &user)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	if err := s.vd.Struct(data); err != nil {
+	if err := s.vd.Struct(user); err != nil {
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	hashedPassword := util.PasswordEncryption([]byte(data.Password))
-	data.Id = primitive.NewObjectID()
-	data.Role = "user"
-	data.Avatar = "default.jpeg"
-	data.Password = hashedPassword
-	data.CreatedAt = time.Now()
-	data.UpdatedAt = time.Now()
-	_, err = collection.InsertOne(ctx, data)
+	hashedPassword := util.PasswordEncryption([]byte(user.Password))
+	user.Id = primitive.NewObjectID()
+	user.Role = "user"
+	user.Avatar = "default.jpeg"
+	user.Password = hashedPassword
+	user.CreatedAt = time.Now()
+	user.UpdatedAt = time.Now()
+	_, err = collection.InsertOne(ctx, user)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -124,7 +124,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		asynq.ProcessIn(1 * time.Minute),
 		asynq.Queue(workers.CriticalQueue),
 	}
-	err = s.distributor.SendVerificationMailTask(ctx, &workers.PayloadSendMail{Email: data.Email}, opts...)
+	err = s.distributor.SendVerificationMailTask(ctx, &workers.PayloadSendMail{Email: user.Email}, opts...)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
@@ -141,19 +141,31 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
-	token, err := jwtoken.CreateToken(ctx, duration, data.Id.Hex(), data.Email)
+	token, err := jwtoken.CreateToken(ctx, duration, user.Id.Hex(), user.Email)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
+	resposne := userResponseParams{
+		Id:          user.Id.Hex(),
+		Avatar:      user.Avatar,
+		UserName:    user.UserName,
+		Role:        user.Role,
+		Email:       user.Email,
+		PhoneNumber: user.PhoneNumber,
+		Verified:    user.Verified,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+	}
+
 	result := struct {
-		Status string
-		Token  string
-		Data   store.User
+		Status string             `json:"status"`
+		Token  string             `json:"token"`
+		Data   userResponseParams `json:"data"`
 	}{
 		Status: "success",
 		Token:  token,
-		Data:   data,
+		Data:   resposne,
 	}
 	return util.ResponseHandler(w, result, http.StatusCreated)
 }
@@ -161,7 +173,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
-	var users store.UserList
+	var users userResponseListParams
 	curr, err := collection.Find(ctx, bson.D{{}})
 	if err != nil {
 		log.Print(err)
@@ -179,13 +191,24 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 
 			return util.ResponseHandler(w, err, http.StatusInternalServerError)
 		}
-		users = append(users, user)
+
+		users = append(users, userResponseParams{
+			Id:          user.Id.Hex(),
+			Avatar:      user.Avatar,
+			UserName:    user.UserName,
+			Role:        user.Role,
+			Email:       user.Email,
+			PhoneNumber: user.PhoneNumber,
+			Verified:    user.Verified,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+		})
 	}
 
 	result := struct {
-		Status string
-		Result int32
-		Data   store.UserList
+		Status string                 `json:"status"`
+		Result int32                  `json:"result"`
+		Data   userResponseListParams `json:"data"`
 	}{
 		Status: "success",
 		Result: int32(len(users)),
@@ -213,7 +236,6 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
 	err = curr.Decode(&user)
-	fmt.Println(err)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
@@ -221,12 +243,24 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
+	resposne := userResponseParams{
+		Id:          user.Id.Hex(),
+		Avatar:      user.Avatar,
+		UserName:    user.UserName,
+		Role:        user.Role,
+		Email:       user.Email,
+		PhoneNumber: user.PhoneNumber,
+		Verified:    user.Verified,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+	}
+
 	result := struct {
-		Status string
-		Data   store.User
+		Status string             `json:"status"`
+		Data   userResponseParams `json:"data"`
 	}{
 		Status: "sucess",
-		Data:   user,
+		Data:   resposne,
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
@@ -277,7 +311,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	result := struct {
-		Status string
+		Status string `json:"status"`
 	}{
 		Status: "success",
 	}
@@ -346,12 +380,11 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	result := struct {
-		Status  string
-		Message string
-		Data    string
+		Status string `json:"status"`
+		Data   string `json:"data"`
 	}{
-		Status:  "success",
-		Message: "URL to reset your password sent to your email",
+		Status: "success",
+		Data:   "URL to reset your password sent to your email",
 	}
 
 	return util.ResponseHandler(w, result, http.StatusOK)
@@ -413,7 +446,7 @@ func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	result := struct {
-		Status string
+		Status string `json:"status"`
 	}{
 		Status: "success",
 	}
@@ -456,11 +489,11 @@ func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	result := struct {
-		Status  string
-		Message string
+		Status string `json:"status"`
+		Data   string `json:"data"`
 	}{
-		Status:  "success",
-		Message: "account verified",
+		Status: "success",
+		Data:   "account verified",
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
