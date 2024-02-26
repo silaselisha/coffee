@@ -8,6 +8,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -82,51 +83,109 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 }
 
 func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.Store.Collection(ctx, "coffeeshop", "users")
-	_, err := collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
-		{Keys: bson.D{{Key: "username", Value: 1}}, Options: options.Index().SetUnique(true)},
-	})
+	session, err := s.Store.TxnStartSession(ctx)
+	if err != nil {
+		return session.AbortTransaction(ctx)
+	}
+
+	defer session.EndSession(ctx)
+	
+	response, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		collection := s.Store.Collection(ctx, "coffeeshop", "users")
+		_, err = collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
+			{Keys: bson.D{{Key: "username", Value: 1}}, Options: options.Index().SetUnique(true)},
+		})
+
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		var user store.User
+
+		userBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			if err == io.EOF {
+				session.AbortTransaction(ctx)
+				return nil, err
+			}
+
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		err = json.Unmarshal(userBytes, &user)
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		if err := s.vd.Struct(user); err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		hashedPassword := util.PasswordEncryption([]byte(user.Password))
+		user.Id = primitive.NewObjectID()
+		user.Role = "user"
+		user.Avatar = "default.jpeg"
+		user.Password = hashedPassword
+		user.CreatedAt = time.Now()
+		user.UpdatedAt = time.Now()
+		_, err = collection.InsertOne(ctx, user)
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		opts := []asynq.Option{
+			asynq.MaxRetry(10),
+			asynq.ProcessIn(1 * time.Minute),
+			asynq.Queue(workers.CriticalQueue),
+		}
+		err = s.distributor.SendVerificationMailTask(ctx, &workers.PayloadSendMail{Email: user.Email}, opts...)
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		resposne := &userResponseParams{
+			Id:          user.Id.Hex(),
+			Avatar:      user.Avatar,
+			UserName:    user.UserName,
+			Role:        user.Role,
+			Email:       user.Email,
+			PhoneNumber: user.PhoneNumber,
+			Verified:    user.Verified,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+		}
+
+		err = session.CommitTransaction(ctx)
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		return resposne, nil
+	}, &options.TransactionOptions{})
 
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
+		switch {
+		case errors.Is(err, mongo.ErrNoDocuments):
+			return util.ResponseHandler(w, fmt.Errorf("document not found %w", err).Error(), http.StatusNotFound)
+		case errors.As(err, &mongo.WriteException{}):
+			wrtExcp, _ := err.(mongo.WriteException)
+			if wrtExcp.WriteErrors[0].Code == 11000 {
+				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+			}
+		case errors.Is(err, &json.SyntaxError{}):
+			return util.ResponseHandler(w, fmt.Errorf("invalid data input for operation %w", err).Error(), http.StatusBadRequest)
 
-	var user store.User
-
-	userBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-	err = json.Unmarshal(userBytes, &user)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	if err := s.vd.Struct(user); err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-
-	hashedPassword := util.PasswordEncryption([]byte(user.Password))
-	user.Id = primitive.NewObjectID()
-	user.Role = "user"
-	user.Avatar = "default.jpeg"
-	user.Password = hashedPassword
-	user.CreatedAt = time.Now()
-	user.UpdatedAt = time.Now()
-	_, err = collection.InsertOne(ctx, user)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	opts := []asynq.Option{
-		asynq.MaxRetry(10),
-		asynq.ProcessIn(1 * time.Minute),
-		asynq.Queue(workers.CriticalQueue),
-	}
-	err = s.distributor.SendVerificationMailTask(ctx, &workers.PayloadSendMail{Email: user.Email}, opts...)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		default:
+			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 
 	jwtoken := token.NewToken(s.envs.SECRET_ACCESS_KEY)
@@ -140,32 +199,20 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
-
-	token, err := jwtoken.CreateToken(ctx, duration, user.Id.Hex(), user.Email)
+	user := response.(*userResponseParams)
+	token, err := jwtoken.CreateToken(ctx, duration, user.Id, user.Email)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	resposne := userResponseParams{
-		Id:          user.Id.Hex(),
-		Avatar:      user.Avatar,
-		UserName:    user.UserName,
-		Role:        user.Role,
-		Email:       user.Email,
-		PhoneNumber: user.PhoneNumber,
-		Verified:    user.Verified,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-	}
-
 	result := struct {
-		Status string             `json:"status"`
-		Token  string             `json:"token"`
-		Data   userResponseParams `json:"data"`
+		Status string              `json:"status"`
+		Token  string              `json:"token"`
+		Data   *userResponseParams `json:"data"`
 	}{
 		Status: "success",
 		Token:  token,
-		Data:   resposne,
+		Data:   user,
 	}
 	return util.ResponseHandler(w, result, http.StatusCreated)
 }
