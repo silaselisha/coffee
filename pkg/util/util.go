@@ -109,7 +109,7 @@ func ResetToken(expire int32) (timestamp int64) {
 	return expiryTime.Local().UnixMilli()
 }
 
-func ImageProcessor(ctx context.Context, file io.Reader, opts FileMetadata) (data []byte, fileName string, err error) {
+func ImageProcessor(ctx context.Context, file io.Reader, opts FileMetadata) (data []byte, fileName string, extension string, err error) {
 	data, err = io.ReadAll(file)
 	if err != nil {
 		return
@@ -121,7 +121,7 @@ func ImageProcessor(ctx context.Context, file io.Reader, opts FileMetadata) (dat
 		return
 	}
 
-	extension := contetntType[1]
+	extension = contetntType[1]
 	objectName, err := genObjectToken()
 	if err != nil {
 		err = fmt.Errorf("error occured while generating objects' name %w", err)

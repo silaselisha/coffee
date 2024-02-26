@@ -13,7 +13,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -324,7 +323,16 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
-	if payload.Id != id.Hex() {
+	var user store.User
+	err = collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+		}
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	if payload.Id != user.Id.Hex() {
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
 
@@ -347,18 +355,19 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	if file, _, err := r.FormFile("avatar"); err == nil {
 		go func() {
 			defer file.Close()
-			data, filename, err := util.ImageProcessor(ctx, file, util.FileMetadata{ContetntType: "image"})
+			data, filename, extension, err := util.ImageProcessor(ctx, file, util.FileMetadata{ContetntType: "image"})
 			if err != nil {
 				errs <- err
 				return
 			}
-		
-			err = os.WriteFile(filename, data, 0666)
+
+			objectKey := fmt.Sprintf("images/avatars/%s", filename)
+			err = s.S3Client.UploadImage(ctx, filename, objectKey, s.envs.S3_BUCKET_NAME, extension, data)
 			if err != nil {
 				errs <- err
 			}
 
-			fileName <- filename
+			fileName <- objectKey
 			close(errs)
 			close(fileName)
 		}()
@@ -408,17 +417,42 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
+	var user store.User
+	err = collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+		}
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+	}
+
 	if payload.Id != id.Hex() {
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
 
-	var deletedDocument store.User
-	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&deletedDocument)
+	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "invalid operation on data", http.StatusNotFound)
 		}
 		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
+	}
+
+	errs := make(chan error)
+	go func() {
+		avatarURL := user.Avatar
+		fmt.Println(avatarURL)
+		err := s.S3Client.DeleteImage(ctx, avatarURL, s.envs.S3_BUCKET_NAME)
+		if err != nil {
+			errs <- err
+			return
+		}
+		close(errs)
+	}()
+
+	err = <-errs
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
 	return util.ResponseHandler(w, "", http.StatusNoContent)
