@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
@@ -16,6 +18,7 @@ import (
 type Server struct {
 	Router      *mux.Router
 	Store       store.Mongo
+	S3Client   	*util.CoffeeShopBucket
 	vd          *validator.Validate
 	envs        *util.Config
 	token       token.Token
@@ -29,6 +32,16 @@ func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor worke
 	if err != nil {
 		log.Panic(err)
 	}
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	coffeShopBucket := util.NewS3Client(cfg, func(o *s3.Options) {
+		o.Region = "us-east-1"
+	})
+	server.S3Client = coffeShopBucket
 
 	tkn := token.NewToken(envs.SECRET_ACCESS_KEY)
 	store := store.NewMongoClient(mongoClient)
