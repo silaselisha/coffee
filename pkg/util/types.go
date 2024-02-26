@@ -15,6 +15,7 @@ type Config struct {
 	DB_PASSWORD          string `mapstructure:"DB_PASSWORD"`
 	SMTP_PASSWORD        string `mapstructure:"SMTP_PASSWORD"`
 	SMTP_USERNAME        string `mapstructure:"SMTP_USERNAME"`
+	S3_BUCKET_NAME       string `mapstructure:"S3_BUCKET_NAME"`
 	SMTP_SENDER          string `mapstructure:"SMTP_SENDER"`
 	SERVER_ADDRESS       string `mapstructure:"SERVER_ADDRESS"`
 	JWT_EXPIRES_AT       string `mapstructure:"JWT_EXPIRES_AT"`

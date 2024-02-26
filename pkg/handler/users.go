@@ -13,7 +13,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -347,18 +346,21 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	if file, _, err := r.FormFile("avatar"); err == nil {
 		go func() {
 			defer file.Close()
-			data, filename, err := util.ImageProcessor(ctx, file, util.FileMetadata{ContetntType: "image"})
+			data, filename, extension, err := util.ImageProcessor(ctx, file, util.FileMetadata{ContetntType: "image"})
 			if err != nil {
 				errs <- err
 				return
 			}
-		
-			err = os.WriteFile(filename, data, 0666)
+
+			object := fmt.Sprintf("https://%s.s3.amazonaws.com/images/avatars/%s", s.envs.S3_BUCKET_NAME, filename)
+
+			keyObject := fmt.Sprintf("images/avatars/%s", filename)
+			err = s.S3Client.UploadImage(ctx, filename, keyObject, s.envs.S3_BUCKET_NAME, extension, data)
 			if err != nil {
 				errs <- err
 			}
 
-			fileName <- filename
+			fileName <- object
 			close(errs)
 			close(fileName)
 		}()
@@ -371,6 +373,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 			data["avatar"] = filename
 		case err := <-errs:
 			if err != nil {
+				fmt.Println(err)
 				return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 			}
 		}
