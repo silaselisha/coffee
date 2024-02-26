@@ -8,12 +8,13 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -73,8 +74,8 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 	res := struct {
-		Status string
-		Token  string
+		Status string `json:"status"`
+		Token  string `json:"token"`
 	}{
 		Status: "success",
 		Token:  token,
@@ -83,51 +84,109 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 }
 
 func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.Store.Collection(ctx, "coffeeshop", "users")
-	_, err := collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
-		{Keys: bson.D{{Key: "username", Value: 1}}, Options: options.Index().SetUnique(true)},
-	})
+	session, err := s.Store.TxnStartSession(ctx)
+	if err != nil {
+		return session.AbortTransaction(ctx)
+	}
+
+	defer session.EndSession(ctx)
+
+	response, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		collection := s.Store.Collection(ctx, "coffeeshop", "users")
+		_, err = collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
+			{Keys: bson.D{{Key: "username", Value: 1}}, Options: options.Index().SetUnique(true)},
+		})
+
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		var user store.User
+
+		userBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			if err == io.EOF {
+				session.AbortTransaction(ctx)
+				return nil, err
+			}
+
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		err = json.Unmarshal(userBytes, &user)
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		if err := s.vd.Struct(user); err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		hashedPassword := util.PasswordEncryption([]byte(user.Password))
+		user.Id = primitive.NewObjectID()
+		user.Role = "user"
+		user.Avatar = "default.jpeg"
+		user.Password = hashedPassword
+		user.CreatedAt = time.Now()
+		user.UpdatedAt = time.Now()
+		_, err = collection.InsertOne(ctx, user)
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		opts := []asynq.Option{
+			asynq.MaxRetry(10),
+			asynq.ProcessIn(1 * time.Minute),
+			asynq.Queue(workers.CriticalQueue),
+		}
+		err = s.distributor.SendVerificationMailTask(ctx, &workers.PayloadSendMail{Email: user.Email}, opts...)
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		resposne := &userResponseParams{
+			Id:          user.Id.Hex(),
+			Avatar:      user.Avatar,
+			UserName:    user.UserName,
+			Role:        user.Role,
+			Email:       user.Email,
+			PhoneNumber: user.PhoneNumber,
+			Verified:    user.Verified,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+		}
+
+		err = session.CommitTransaction(ctx)
+		if err != nil {
+			session.AbortTransaction(ctx)
+			return nil, err
+		}
+
+		return resposne, nil
+	}, &options.TransactionOptions{})
 
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
+		switch {
+		case errors.Is(err, mongo.ErrNoDocuments):
+			return util.ResponseHandler(w, fmt.Errorf("document not found %w", err).Error(), http.StatusNotFound)
+		case errors.As(err, &mongo.WriteException{}):
+			wrtExcp, _ := err.(mongo.WriteException)
+			if wrtExcp.WriteErrors[0].Code == 11000 {
+				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+			}
+		case errors.Is(err, &json.SyntaxError{}):
+			return util.ResponseHandler(w, fmt.Errorf("invalid data input for operation %w", err).Error(), http.StatusBadRequest)
 
-	var data store.User
-
-	userBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-	err = json.Unmarshal(userBytes, &data)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	if err := s.vd.Struct(data); err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-
-	hashedPassword := util.PasswordEncryption([]byte(data.Password))
-	data.Id = primitive.NewObjectID()
-	data.Role = "user"
-	data.Avatar = "default.jpeg"
-	data.Password = hashedPassword
-	data.CreatedAt = time.Now()
-	data.UpdatedAt = time.Now()
-	_, err = collection.InsertOne(ctx, data)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	opts := []asynq.Option{
-		asynq.MaxRetry(10),
-		asynq.ProcessIn(1 * time.Minute),
-		asynq.Queue(workers.CriticalQueue),
-	}
-	err = s.distributor.SendVerificationMailTask(ctx, &workers.PayloadSendMail{Email: data.Email}, opts...)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		default:
+			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 
 	jwtoken := token.NewToken(s.envs.SECRET_ACCESS_KEY)
@@ -141,20 +200,20 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
-
-	token, err := jwtoken.CreateToken(ctx, duration, data.Id.Hex(), data.Email)
+	user := response.(*userResponseParams)
+	token, err := jwtoken.CreateToken(ctx, duration, user.Id, user.Email)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
 	result := struct {
-		Status string
-		Token  string
-		Data   store.User
+		Status string              `json:"status"`
+		Token  string              `json:"token"`
+		Data   *userResponseParams `json:"data"`
 	}{
 		Status: "success",
 		Token:  token,
-		Data:   data,
+		Data:   user,
 	}
 	return util.ResponseHandler(w, result, http.StatusCreated)
 }
@@ -162,7 +221,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
-	var users store.UserList
+	var users userResponseListParams
 	curr, err := collection.Find(ctx, bson.D{{}})
 	if err != nil {
 		log.Print(err)
@@ -180,13 +239,24 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 
 			return util.ResponseHandler(w, err, http.StatusInternalServerError)
 		}
-		users = append(users, user)
+
+		users = append(users, userResponseParams{
+			Id:          user.Id.Hex(),
+			Avatar:      user.Avatar,
+			UserName:    user.UserName,
+			Role:        user.Role,
+			Email:       user.Email,
+			PhoneNumber: user.PhoneNumber,
+			Verified:    user.Verified,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+		})
 	}
 
 	result := struct {
-		Status string
-		Result int32
-		Data   store.UserList
+		Status string                 `json:"status"`
+		Result int32                  `json:"result"`
+		Data   userResponseListParams `json:"data"`
 	}{
 		Status: "success",
 		Result: int32(len(users)),
@@ -214,7 +284,6 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
 	err = curr.Decode(&user)
-	fmt.Println(err)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
@@ -222,12 +291,24 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
+	resposne := userResponseParams{
+		Id:          user.Id.Hex(),
+		Avatar:      user.Avatar,
+		UserName:    user.UserName,
+		Role:        user.Role,
+		Email:       user.Email,
+		PhoneNumber: user.PhoneNumber,
+		Verified:    user.Verified,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+	}
+
 	result := struct {
-		Status string
-		Data   store.User
+		Status string             `json:"status"`
+		Data   userResponseParams `json:"data"`
 	}{
 		Status: "sucess",
-		Data:   user,
+		Data:   resposne,
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
@@ -261,44 +342,36 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		}
 	}
 
+	errs := make(chan error)
+	fileName := make(chan string)
 	if file, _, err := r.FormFile("avatar"); err == nil {
-		resultChannel := make(chan imageResultParams, 2)
-		var wg sync.WaitGroup
-
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-			avatarFile, avatarName, err := util.ImageResizeProcessor(ctx, file)
+			defer file.Close()
+			data, filename, err := util.ImageProcessor(ctx, file, util.FileMetadata{ContetntType: "image"})
 			if err != nil {
-				resultChannel <- imageResultParams{err: err}
+				errs <- err
 				return
 			}
-			log.Print("goroutine 1 ", time.Now())
-			resultChannel <- imageResultParams{avatarFile: avatarFile, avatarName: avatarName}
+		
+			err = os.WriteFile(filename, data, 0666)
+			if err != nil {
+				errs <- err
+			}
+
+			fileName <- filename
+			close(errs)
+			close(fileName)
 		}()
 
-		wg.Add(1)
-		avatarURL := make(chan string)
-		go func(avatarData imageResultParams) {
-			defer wg.Done()
-
-			url, err := util.S3awsImageUpload(ctx, avatarData.avatarFile, "watamu-coffee-shop", avatarData.avatarName, "images/avatars")
-			fmt.Println(url)
-			if err != nil {
-				resultChannel <- imageResultParams{err: err}
-				return
-			}
-			avatarURL <- url
-			close(avatarURL)
-		}(<-resultChannel)
-
 		select {
-		case avatarName := <-avatarURL:
-			data["avatar"] = avatarName
-
-		case result := <-resultChannel:
-			if result.err != nil {
-				return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		case filename, ok := <-fileName:
+			if !ok {
+				return util.ResponseHandler(w, fmt.Errorf("image file name error"), http.StatusInternalServerError)
+			}
+			data["avatar"] = filename
+		case err := <-errs:
+			if err != nil {
+				return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 			}
 		}
 	}
@@ -318,7 +391,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	result := struct {
-		Status string
+		Status string `json:"status"`
 	}{
 		Status: "success",
 	}
@@ -339,7 +412,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err, http.StatusForbidden)
 	}
 
-	var deletedDocument bson.M
+	var deletedDocument store.User
 	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&deletedDocument)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -386,12 +459,11 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	result := struct {
-		Status  string
-		Message string
-		Data    string
+		Status string `json:"status"`
+		Data   string `json:"data"`
 	}{
-		Status:  "success",
-		Message: "URL to reset your password sent to your email",
+		Status: "success",
+		Data:   "URL to reset your password sent to your email",
 	}
 
 	return util.ResponseHandler(w, result, http.StatusOK)
@@ -453,7 +525,7 @@ func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	result := struct {
-		Status string
+		Status string `json:"status"`
 	}{
 		Status: "success",
 	}
@@ -496,11 +568,11 @@ func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter
 	}
 
 	result := struct {
-		Status  string
-		Message string
+		Status string `json:"status"`
+		Data   string `json:"data"`
 	}{
-		Status:  "success",
-		Message: "account verified",
+		Status: "success",
+		Data:   "account verified",
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }

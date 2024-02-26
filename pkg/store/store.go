@@ -5,11 +5,13 @@ import (
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Mongo interface {
-	Collection(ctx context.Context, db, collection string) *mongo.Collection
 	Disconnect(ctx context.Context) error
+	TxnStartSession(ctx context.Context) (mongo.Session, error)
+	Collection(ctx context.Context, db, collection string) *mongo.Collection
 }
 
 type MongoClient struct {
@@ -33,4 +35,13 @@ func (ms *MongoClient) Disconnect(ctx context.Context) error {
 		return fmt.Errorf("database disconnection error %w", err)
 	}
 	return nil
+}
+
+func (ms *MongoClient) TxnStartSession(ctx context.Context) (mongo.Session, error) {
+	session, err := ms.client.StartSession(&options.SessionOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
 }

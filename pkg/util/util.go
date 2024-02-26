@@ -1,15 +1,12 @@
 package util
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
-	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -19,10 +16,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 func LoadEnvs(path string) (config *Config, err error) {
@@ -61,7 +54,7 @@ func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
 	return client, nil
 }
 
-func ResponseHandler(w http.ResponseWriter, message any, statusCode int) error {
+func ResponseHandler(w http.ResponseWriter, message interface{}, statusCode int) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
@@ -92,57 +85,6 @@ func CreateNewUser(email, name, phoneNumber, role string) store.User {
 	return user
 }
 
-func ImageResizeProcessor(ctx context.Context, file multipart.File) ([]byte, string, error) {
-	imageBytes, err := io.ReadAll(file)
-	if err != nil {
-		if err == io.EOF {
-			return nil, "", fmt.Errorf("end of file error: %w", err)
-		}
-		return nil, "", err
-	}
-	defer file.Close()
-
-	contentType := strings.Split(http.DetectContentType(imageBytes), "/")[0]
-	ext := strings.Split(http.DetectContentType(imageBytes), "/")[1]
-	if contentType != "image" {
-		fmt.Println(contentType)
-		return nil, "", fmt.Errorf("wrong file upload, only images required")
-	}
-
-	imageId, err := genObjectToken()
-	if err != nil {
-		return nil, "", fmt.Errorf("error generating imageid")
-	}
-
-	imageName := fmt.Sprintf("%s.%s", imageId, ext)
-	return imageBytes, imageName, nil
-}
-
-func S3awsImageUpload(ctx context.Context, imageByte []byte, bucket string, objectKey string, resource string) (string, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("us-east-1"),
-	})
-	if err != nil {
-		return "", fmt.Errorf("aws session error %w", err)
-	}
-
-	objectKey = fmt.Sprintf("%s/%s", resource, objectKey)
-	uploader := s3manager.NewUploader(sess)
-	_, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(objectKey),
-		Body:   bytes.NewReader(imageByte),
-	})
-
-	if err != nil {
-		log.Print(err)
-		return "", err
-	}
-
-	avatarURL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucket, objectKey)
-	return avatarURL, nil
-}
-
 func PasswordEncryption(password []byte) string {
 	return fmt.Sprintf("%x", crypto.SHA256.New().Sum(password))
 }
@@ -165,4 +107,27 @@ func ResetToken(expire int32) (timestamp int64) {
 	duration := time.Minute * time.Duration(int(expire))
 	expiryTime := time.Now().Add(duration)
 	return expiryTime.Local().UnixMilli()
+}
+
+func ImageProcessor(ctx context.Context, file io.Reader, opts FileMetadata) (data []byte, fileName string, err error) {
+	data, err = io.ReadAll(file)
+	if err != nil {
+		return
+	}
+
+	contetntType := strings.Split(http.DetectContentType(data), "/")
+	if contetntType[0] != opts.ContetntType {
+		err = fmt.Errorf("invalid file! required file is %+v", opts.ContetntType)
+		return
+	}
+
+	extension := contetntType[1]
+	objectName, err := genObjectToken()
+	if err != nil {
+		err = fmt.Errorf("error occured while generating objects' name %w", err)
+		return
+	}
+
+	fileName = fmt.Sprintf("%s.%s", objectName, extension)
+	return
 }
