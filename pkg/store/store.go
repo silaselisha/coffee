@@ -43,6 +43,5 @@ func (ms *MongoClient) TxnStartSession(ctx context.Context) (mongo.Session, erro
 		return nil, err
 	}
 
-	// defer session.EndSession(ctx)
 	return session, nil
 }

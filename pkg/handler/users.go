@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -89,7 +90,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	defer session.EndSession(ctx)
-	
+
 	response, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
 		collection := s.Store.Collection(ctx, "coffeeshop", "users")
 		_, err = collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -341,7 +342,39 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		}
 	}
 
-	r.FormFile("avatar")
+	errs := make(chan error)
+	fileName := make(chan string)
+	if file, _, err := r.FormFile("avatar"); err == nil {
+		go func() {
+			defer file.Close()
+			data, filename, err := util.ImageProcessor(ctx, file, util.FileMetadata{ContetntType: "image"})
+			if err != nil {
+				errs <- err
+				return
+			}
+		
+			err = os.WriteFile(filename, data, 0666)
+			if err != nil {
+				errs <- err
+			}
+
+			fileName <- filename
+			close(errs)
+			close(fileName)
+		}()
+
+		select {
+		case filename, ok := <-fileName:
+			if !ok {
+				return util.ResponseHandler(w, fmt.Errorf("image file name error"), http.StatusInternalServerError)
+			}
+			data["avatar"] = filename
+		case err := <-errs:
+			if err != nil {
+				return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+			}
+		}
+	}
 
 	data["updated_at"] = time.Now()
 	filter := bson.D{{Key: "_id", Value: id}}
@@ -388,7 +421,6 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
 	}
 
-	// avatarURL := deletedDocument.Avatar
 	return util.ResponseHandler(w, "", http.StatusNoContent)
 }
 

@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/silaselisha/coffee-api/pkg/store"
@@ -92,7 +94,7 @@ func ComparePasswordEncryption(password, comparePassword string) bool {
 	return hash == comparePassword
 }
 
-func GenObjectToken() (string, error) {
+func genObjectToken() (string, error) {
 	buff := make([]byte, 16)
 	_, err := rand.Read(buff)
 	if err != nil {
@@ -105,4 +107,27 @@ func ResetToken(expire int32) (timestamp int64) {
 	duration := time.Minute * time.Duration(int(expire))
 	expiryTime := time.Now().Add(duration)
 	return expiryTime.Local().UnixMilli()
+}
+
+func ImageProcessor(ctx context.Context, file io.Reader, opts FileMetadata) (data []byte, fileName string, err error) {
+	data, err = io.ReadAll(file)
+	if err != nil {
+		return
+	}
+
+	contetntType := strings.Split(http.DetectContentType(data), "/")
+	if contetntType[0] != opts.ContetntType {
+		err = fmt.Errorf("invalid file! required file is %+v", opts.ContetntType)
+		return
+	}
+
+	extension := contetntType[1]
+	objectName, err := genObjectToken()
+	if err != nil {
+		err = fmt.Errorf("error occured while generating objects' name %w", err)
+		return
+	}
+
+	fileName = fmt.Sprintf("%s.%s", objectName, extension)
+	return
 }

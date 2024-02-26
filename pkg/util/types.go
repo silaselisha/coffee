@@ -23,3 +23,6 @@ type Config struct {
 	REDIS_SERVER_ADDRESS string `mapstructure:"REDIS_SERVER_ADDRESS"`
 }
 
+type FileMetadata struct {
+	ContetntType string
+}
