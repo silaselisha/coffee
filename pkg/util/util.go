@@ -109,7 +109,7 @@ func ResetToken(expire int32) (timestamp int64) {
 	return expiryTime.Local().UnixMilli()
 }
 
-func ImageProcessor(ctx context.Context, file io.Reader, opts FileMetadata) (data []byte, fileName string, extension string, err error) {
+func ImageProcessor(ctx context.Context, file io.ReadCloser, opts *FileMetadata) (data []byte, fileName string, extension string, err error) {
 	data, err = io.ReadAll(file)
 	if err != nil {
 		return
@@ -128,6 +128,7 @@ func ImageProcessor(ctx context.Context, file io.Reader, opts FileMetadata) (dat
 		return
 	}
 
+	defer file.Close()
 	fileName = fmt.Sprintf("%s.%s", objectName, extension)
 	return
 }

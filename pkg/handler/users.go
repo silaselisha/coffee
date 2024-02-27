@@ -144,7 +144,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 			asynq.ProcessIn(1 * time.Minute),
 			asynq.Queue(workers.CriticalQueue),
 		}
-		err = s.distributor.SendVerificationMailTask(ctx, &workers.PayloadSendMail{Email: user.Email}, opts...)
+		err = s.distributor.SendVerificationMailTask(ctx, &util.PayloadSendMail{Email: user.Email}, opts...)
 		if err != nil {
 			session.AbortTransaction(ctx)
 			return nil, err
@@ -355,14 +355,14 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	if file, _, err := r.FormFile("avatar"); err == nil {
 		go func() {
 			defer file.Close()
-			data, filename, extension, err := util.ImageProcessor(ctx, file, util.FileMetadata{ContetntType: "image"})
+			data, filename, extension, err := util.ImageProcessor(ctx, file, &util.FileMetadata{ContetntType: "image"})
 			if err != nil {
 				errs <- err
 				return
 			}
 
 			objectKey := fmt.Sprintf("images/avatars/%s", filename)
-			err = s.S3Client.UploadImage(ctx, filename, objectKey, s.envs.S3_BUCKET_NAME, extension, data)
+			err = s.S3Client.UploadImage(ctx, objectKey, s.envs.S3_BUCKET_NAME, extension, data)
 			if err != nil {
 				errs <- err
 			}
@@ -487,7 +487,7 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 		asynq.MaxRetry(10),
 		asynq.Queue("critical"),
 	}
-	err = s.distributor.SendPasswordResetMailTask(ctx, &workers.PayloadSendMail{Email: user.Email}, opts...)
+	err = s.distributor.SendPasswordResetMailTask(ctx, &util.PayloadSendMail{Email: user.Email}, opts...)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
