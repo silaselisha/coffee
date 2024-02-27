@@ -13,14 +13,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type PayloadSendMail struct {
-	Email string `json:"email"`
-}
-
 const SEND_VERIFICATION_EMAIL string = "task:send_verification_email"
 const SEND_PASSWORD_RESET_EMAIL string = "task:send_password_reset_email"
 
-func (distributor *RedisTaskClientDistributor) SendVerificationMailTask(ctx context.Context, payload *PayloadSendMail, opts ...asynq.Option) error {
+func (distributor *RedisTaskClientDistributor) SendVerificationMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error {
 	payloadBuffer, err := json.Marshal(payload)
 	if err != nil {
 		fmt.Print(time.Now())
@@ -38,7 +34,7 @@ func (distributor *RedisTaskClientDistributor) SendVerificationMailTask(ctx cont
 	return nil
 }
 
-func (distributor *RedisTaskClientDistributor) SendPasswordResetMailTask(ctx context.Context, payload *PayloadSendMail, opts ...asynq.Option) error {
+func (distributor *RedisTaskClientDistributor) SendPasswordResetMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error {
 	payloadBuffer, err := json.Marshal(payload)
 	if err != nil {
 		fmt.Print(time.Now())
@@ -93,7 +89,7 @@ func (processor *RedisTaskServerProcessor) ProcessTaskSendResetPasswordMail(ctx 
 }
 
 func getUserByEmail(ctx context.Context, processor *RedisTaskServerProcessor, task *asynq.Task) (store.User, error) {
-	var Payload PayloadSendMail
+	var Payload util.PayloadSendMail
 	err := json.Unmarshal(task.Payload(), &Payload)
 	if err != nil {
 		fmt.Print(time.Now())
@@ -120,6 +116,7 @@ func (processor *RedisTaskServerProcessor) Start() error {
 	mux.HandleFunc(SEND_VERIFICATION_EMAIL, processor.ProcessTaskSendVerificationMail)
 	mux.HandleFunc(SEND_PASSWORD_RESET_EMAIL, processor.ProcessTaskSendResetPasswordMail)
 	mux.HandleFunc(UPLOAD_S3_OBJECT, processor.ProcessTaskUploadS3Object)
+	mux.HandleFunc(UPLOAD_MULTIPLE_S3_OBJECTS, processor.ProcessTaskMultipleUploadS3Object)
 
 	return processor.server.Start(mux)
 }

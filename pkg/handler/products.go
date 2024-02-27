@@ -233,8 +233,8 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
-		var item store.Item // product variable
-
+		var item store.Item
+		var images []*util.PayloadUploadImage
 		reader, err := r.MultipartReader()
 		if err != nil {
 			return nil, err
@@ -307,8 +307,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 					asynq.Queue(workers.CriticalQueue),
 				}
 
-				err = s.distributor.SendS3ObjectUploadTask(ctx, &workers.PayloadUploadImage{
-					FileName:  fileName,
+				err = s.distributor.SendS3ObjectUploadTask(ctx, &util.PayloadUploadImage{
 					ObjectKey: objectKey,
 					Extension: extension,
 					Image:     data,
@@ -317,13 +316,36 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 				if err != nil {
 					return nil, err
 				}
+
+			case "images":
+				data, fileName, extension, err := util.ImageProcessor(ctx, curr, &util.FileMetadata{ContetntType: "image"})
+				if err != nil {
+					return nil, err
+				}
+				objectKey := fmt.Sprintf("images/products/beverages/%s", fileName)
+				images = append(images, &util.PayloadUploadImage{
+					Image:     data,
+					Extension: extension,
+					ObjectKey: objectKey,
+				})
+				item.Images = append(item.Images, objectKey)
 			}
+		}
+
+		opts := []asynq.Option{
+			asynq.MaxRetry(3),
+			asynq.ProcessIn(2 * time.Second),
+			asynq.Queue(workers.CriticalQueue),
+		}
+		err = s.distributor.SendMultipleS3ObjectUploadTask(ctx, images, opts...)
+		if err != nil {
+			return nil, err
 		}
 
 		item.Id = primitive.NewObjectID()
 		item.CreatedAt = time.Now()
 		item.UpdatedAt = time.Now()
-		
+
 		_, err = collection.InsertOne(ctx, item)
 		if err != nil {
 			return nil, err
@@ -331,6 +353,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 
 		product := itemResponseParams{
 			Id:          item.Id.Hex(),
+			Images:      item.Images,
 			Name:        item.Name,
 			Price:       item.Price,
 			Ingridients: item.Ingridients,

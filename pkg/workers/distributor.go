@@ -4,12 +4,14 @@ import (
 	"context"
 
 	"github.com/hibiken/asynq"
+	"github.com/silaselisha/coffee-api/pkg/util"
 )
 
-type TaskDistributor interface{
-	SendVerificationMailTask(ctx context.Context, payload *PayloadSendMail, opts ...asynq.Option) error
-	SendPasswordResetMailTask(ctx context.Context, payload *PayloadSendMail, opts ...asynq.Option) error
-	SendS3ObjectUploadTask(ctx context.Context, payload *PayloadUploadImage, opts ...asynq.Option) error
+type TaskDistributor interface {
+	SendVerificationMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error
+	SendPasswordResetMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error
+	SendS3ObjectUploadTask(ctx context.Context, payload *util.PayloadUploadImage, opts ...asynq.Option) error
+	SendMultipleS3ObjectUploadTask(ctx context.Context, payload []*util.PayloadUploadImage, opts ...asynq.Option) error
 }
 
 type RedisTaskClientDistributor struct {
