@@ -207,81 +207,132 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 }
 
 func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.Store.Collection(ctx, "coffeeshop", "products")
-
-	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "name", Value: 1}},
-		Options: options.Index().SetUnique(true),
-	})
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	err = r.ParseMultipartForm(int64(32 << 20))
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-
-	opts := []asynq.Option{
-		asynq.MaxRetry(3),
-		asynq.ProcessIn(2 * time.Second),
-		asynq.Queue(workers.CriticalQueue),
-	}
-
-	file, _, err := r.FormFile("thumbnail")
-	if err != nil {
-		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
-	}
-	defer file.Close()
-
-	thumbnail, fileName, extension, err := util.ImageProcessor(ctx, file, &util.FileMetadata{ContetntType: "image"})
+	session, err := s.Store.TxnStartSession(ctx)
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
-	err = s.distributor.SendS3ObjectUploadTask(ctx, &workers.PayloadUploadImage{
-		FileName:  fileName,
-		ObjectKey: objectKey,
-		Extension: extension,
-		Image:     thumbnail,
-	}, opts...)
+	defer session.EndSession(ctx)
+	resposne, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		collection := s.Store.Collection(ctx, "coffeeshop", "products")
+		_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: "name", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		})
+		if err != nil {
+			if err := session.AbortTransaction(ctx); err != nil {
+				return nil, err
+			}
+			return nil, err
+		}
+
+		err = r.ParseMultipartForm(int64(32 << 20))
+		if err != nil {
+			if err := session.AbortTransaction(ctx); err != nil {
+				return nil, err
+			}
+			return nil, err
+		}
+
+		var item store.Item
+		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
+		if err != nil {
+			if err := session.AbortTransaction(ctx); err != nil {
+				return nil, err
+			}
+			return nil, err
+		}
+
+		var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
+
+		file, _, err := r.FormFile("thumbnail")
+		if err != nil {
+			if err := session.AbortTransaction(ctx); err != nil {
+				return nil, err
+			}
+			return nil, err
+		}
+		defer file.Close()
+
+		thumbnail, fileName, extension, err := util.ImageProcessor(ctx, file, &util.FileMetadata{ContetntType: "image"})
+		if err != nil {
+			if err := session.AbortTransaction(ctx); err != nil {
+				return nil, err
+			}
+			return nil, err
+		}
+
+		objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
+		item = store.Item{
+			Id:          primitive.NewObjectID(),
+			Name:        r.FormValue("name"),
+			Price:       price,
+			Ingridients: ingridients,
+			Thumbnail:   objectKey,
+			Summary:     r.FormValue("summary"),
+			Category:    r.FormValue("category"),
+			Description: r.FormValue("description"),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+		_, err = collection.InsertOne(ctx, item)
+		if err != nil {
+			if err := session.AbortTransaction(ctx); err != nil {
+				return nil, err
+			}
+			return nil, err
+		}
+
+		opts := []asynq.Option{
+			asynq.MaxRetry(3),
+			asynq.ProcessIn(2 * time.Second),
+			asynq.Queue(workers.CriticalQueue),
+		}
+
+		err = s.distributor.SendS3ObjectUploadTask(ctx, &workers.PayloadUploadImage{
+			FileName:  fileName,
+			ObjectKey: objectKey,
+			Extension: extension,
+			Image:     thumbnail,
+		}, opts...)
+		if err != nil {
+			if err := session.AbortTransaction(ctx); err != nil {
+				return nil, err
+			}
+			return nil, err
+		}
+
+		product := itemResponseParams{
+			Id:          item.Id.Hex(),
+			Name:        item.Name,
+			Price:       item.Price,
+			Ingridients: item.Ingridients,
+			Thumbnail:   item.Thumbnail,
+			Summary:     item.Summary,
+			Category:    item.Category,
+			Description: item.Description,
+			CreatedAt:   item.CreatedAt,
+			UpdatedAt:   item.UpdatedAt,
+		}
+
+		err = session.CommitTransaction(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return product, nil
+	}, &options.TransactionOptions{})
+
 	if err != nil {
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	var item store.Item
-	price, err := strconv.ParseFloat(r.FormValue("price"), 64)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-
-	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
-
-	item = store.Item{
-		Id:          primitive.NewObjectID(),
-		Name:        r.FormValue("name"),
-		Price:       price,
-		Ingridients: ingridients,
-		Thumbnail:   objectKey,
-		Summary:     r.FormValue("summary"),
-		Category:    r.FormValue("category"),
-		Description: r.FormValue("description"),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-
-	_, err = collection.InsertOne(ctx, item)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
+	product := resposne.(itemResponseParams)
 	result := struct {
-		Status string     `json:"status"`
-		Data   store.Item `json:"data"`
+		Status string             `json:"status"`
+		Data   itemResponseParams `json:"data"`
 	}{
 		Status: "success",
-		Data:   item,
+		Data:   product,
 	}
 
 	return util.ResponseHandler(w, result, http.StatusCreated)
