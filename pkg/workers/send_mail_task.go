@@ -117,6 +117,7 @@ func (processor *RedisTaskServerProcessor) Start() error {
 	mux.HandleFunc(SEND_PASSWORD_RESET_EMAIL, processor.ProcessTaskSendResetPasswordMail)
 	mux.HandleFunc(UPLOAD_S3_OBJECT, processor.ProcessTaskUploadS3Object)
 	mux.HandleFunc(UPLOAD_MULTIPLE_S3_OBJECTS, processor.ProcessTaskMultipleUploadS3Object)
+	mux.HandleFunc(DELETE_S3_OBJECT, processor.ProcessTaskDeleteS3Object)
 
 	return processor.server.Start(mux)
 }

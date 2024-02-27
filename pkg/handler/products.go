@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/hibiken/asynq"
+	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/util"
 	"github.com/silaselisha/coffee-api/pkg/workers"
@@ -188,22 +189,84 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 }
 
 func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.Store.Collection(ctx, "coffeeshop", "products")
-
-	params := mux.Vars(r)
-	id, err := primitive.ObjectIDFromHex(params["id"])
+	session, err := s.Store.TxnStartSession(ctx)
 	if err != nil {
-		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+		return err
 	}
 
-	filter := bson.D{{Key: "_id", Value: id}}
-	var deletedDocument bson.M
-	err = collection.FindOneAndDelete(ctx, filter).Decode(&deletedDocument)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, "invalid operation on data", http.StatusBadRequest)
+	defer session.EndSession(ctx)
+	defer func() {
+		if abortErr := session.AbortTransaction(ctx); abortErr != nil {
+			err = abortErr
 		}
-		return util.ResponseHandler(w, "internal server error", http.StatusInternalServerError)
+	}()
+
+	_, err = session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		collection := s.Store.Collection(ctx, "coffeeshop", "products")
+		params := mux.Vars(r)
+		id, err := primitive.ObjectIDFromHex(params["id"])
+		if err != nil {
+			return nil, err
+		}
+
+		var product store.Item
+		curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
+		err = curr.Decode(&product)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, fmt.Errorf("no document found %w", err)
+			}
+			return nil, err
+		}
+
+		var images []string
+		images = append(images, product.Images...)
+		images = append(images, product.Thumbnail)
+
+		opts := []asynq.Option{
+			asynq.ProcessIn(1 * time.Minute),
+			asynq.MaxRetry(3),
+			asynq.Queue(workers.CriticalQueue),
+		}
+
+		err = s.distributor.SendS3ObjectDeleteTask(ctx, images, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		filter := bson.D{{Key: "_id", Value: id}}
+		var deletedDocument bson.M
+		err = collection.FindOneAndDelete(ctx, filter).Decode(&deletedDocument)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, err
+			}
+			return err, nil
+		}
+
+		err = session.CommitTransaction(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	}, &options.TransactionOptions{})
+
+	if err != nil {
+		switch {
+		case errors.As(err, &mongo.WriteException{}):
+			exception, _ := err.(mongo.WriteException)
+			if exception.WriteErrors[0].Code == 11000 {
+				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+			}
+
+		case errors.Is(err, mongo.ErrNoDocuments):
+			return util.ResponseHandler(w, fmt.Errorf("document not found %w", err).Error(), http.StatusBadRequest)
+
+		default:
+			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+
+		}
 	}
 
 	return util.ResponseHandler(w, "", http.StatusNoContent)
@@ -410,6 +473,10 @@ func productRoutes(gmux *mux.Router, srv *Server) {
 	postProductRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.CreateProductHandler))
 	getProductRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.GetAllProductsHandler))
 	getProductRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(srv.GetProductByIdHandler))
-	deleteProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(srv.DeleteProductByIdHandler))
+
+	deleteProductRouter.Use(middleware.AuthMiddleware(srv.token))
+	deleteProductByIDRouter := deleteProductRouter.PathPrefix("/products").Subrouter()
+	deleteProductByIDRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
+	deleteProductByIDRouter.HandleFunc("/{id}", util.HandleFuncDecorator(srv.DeleteProductByIdHandler))
 	updateProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(srv.UpdateProductHandler))
 }
