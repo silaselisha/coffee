@@ -119,6 +119,7 @@ func (processor *RedisTaskServerProcessor) Start() error {
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(SEND_VERIFICATION_EMAIL, processor.ProcessTaskSendVerificationMail)
 	mux.HandleFunc(SEND_PASSWORD_RESET_EMAIL, processor.ProcessTaskSendResetPasswordMail)
+	mux.HandleFunc(UPLOAD_S3_OBJECT, processor.ProcessTaskUploadS3Object)
 
 	return processor.server.Start(mux)
 }

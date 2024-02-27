@@ -17,15 +17,17 @@ const (
 type TaskProcessor interface {
 	Start() error
 	ProcessTaskSendVerificationMail(ctx context.Context, task *asynq.Task) error
+	ProcessTaskUploadS3Object(ctx context.Context, task *asynq.Task) error
 }
 
 type RedisTaskServerProcessor struct {
 	server *asynq.Server
 	store  store.Mongo
 	envs   util.Config
+	client *util.CoffeeShopBucket
 }
 
-func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs util.Config) TaskProcessor {
+func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs util.Config, client *util.CoffeeShopBucket) TaskProcessor {
 
 	server := asynq.NewServer(opts, asynq.Config{
 		Queues: map[string]int{CriticalQueue: 1, DefaultQueue: 2},
@@ -37,6 +39,7 @@ func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs u
 	return &RedisTaskServerProcessor{
 		server: server,
 		store:  store,
-		envs:  envs,
+		envs:   envs,
+		client: client,
 	}
 }

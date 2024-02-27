@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/util"
+	"github.com/silaselisha/coffee-api/pkg/workers"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -220,38 +222,38 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
 	}
 
-	thumbnailName := make(chan string)
-	errs := make(chan error)
-	go func() {
-		file, _, err := r.FormFile("thumbnail")
-		if err != nil {
-			errs <- err
-			return
-		}
+	opts := []asynq.Option{
+		asynq.MaxRetry(3),
+		asynq.ProcessIn(2 * time.Second),
+		asynq.Queue(workers.CriticalQueue),
+	}
 
-		thumbnailName <- ""
-		close(thumbnailName)
-		defer file.Close()
-	}()
+	file, _, err := r.FormFile("thumbnail")
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+	}
+	defer file.Close()
+
+	thumbnail, fileName, extension, err := util.ImageProcessor(ctx, file, &util.FileMetadata{ContetntType: "image"})
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
+	err = s.distributor.SendS3ObjectUploadTask(ctx, &workers.PayloadUploadImage{
+		FileName:  fileName,
+		ObjectKey: objectKey,
+		Extension: extension,
+		Image:     thumbnail,
+	}, opts...)
+	if err != nil {
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+	}
 
 	var item store.Item
 	price, err := strconv.ParseFloat(r.FormValue("price"), 64)
 	if err != nil {
 		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-
-	select {
-	case err := <-errs:
-		if err != nil {
-			fmt.Println(err.Error())
-			return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
-		}
-
-	case fileName, ok := <-thumbnailName:
-		if !ok {
-			break
-		}
-		item.Thumbnail = fileName
 	}
 
 	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
@@ -261,6 +263,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		Name:        r.FormValue("name"),
 		Price:       price,
 		Ingridients: ingridients,
+		Thumbnail:   objectKey,
 		Summary:     r.FormValue("summary"),
 		Category:    r.FormValue("category"),
 		Description: r.FormValue("description"),

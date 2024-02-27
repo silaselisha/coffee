@@ -355,7 +355,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	if file, _, err := r.FormFile("avatar"); err == nil {
 		go func() {
 			defer file.Close()
-			data, filename, extension, err := util.ImageProcessor(ctx, file, util.FileMetadata{ContetntType: "image"})
+			data, filename, extension, err := util.ImageProcessor(ctx, file, &util.FileMetadata{ContetntType: "image"})
 			if err != nil {
 				errs <- err
 				return
