@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -214,7 +215,13 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
+	defer func() {
+		if abortError := session.AbortTransaction(ctx); err != nil {
+			err = abortError
+		}
+	}()
 	defer session.EndSession(ctx)
+
 	resposne, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
 		collection := s.Store.Collection(ctx, "coffeeshop", "products")
 		_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
@@ -223,72 +230,101 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		})
 
 		if err != nil {
-			if err := session.AbortTransaction(ctx); err != nil {
+			return nil, err
+		}
+
+		var item store.Item // product variable
+
+		reader, err := r.MultipartReader()
+		if err != nil {
+			return nil, err
+		}
+
+		for {
+			curr, err := reader.NextPart()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
 				return nil, err
 			}
-			return nil, err
-		}
 
-		defer func() {
-			if abortError := session.AbortTransaction(ctx); err != nil {
-				err = abortError
+			switch curr.FormName() {
+			case "price":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				price, err := strconv.ParseFloat(string(data), 64)
+				if err != nil {
+					return nil, err
+				}
+				item.Price = price
+
+			case "ingridients":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				ingridients := strings.Split(string(data), ",")
+				item.Ingridients = ingridients
+			case "name":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				item.Name = string(data)
+			case "summary":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				item.Summary = string(data)
+			case "description":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				item.Description = string(data)
+			case "category":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				item.Category = string(data)
+
+			case "thumbnail":
+				data, fileName, extension, err := util.ImageProcessor(ctx, curr, &util.FileMetadata{ContetntType: "image"})
+				if err != nil {
+					return nil, err
+				}
+
+				objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
+				item.Thumbnail = objectKey
+				opts := []asynq.Option{
+					asynq.MaxRetry(3),
+					asynq.ProcessIn(2 * time.Second),
+					asynq.Queue(workers.CriticalQueue),
+				}
+
+				err = s.distributor.SendS3ObjectUploadTask(ctx, &workers.PayloadUploadImage{
+					FileName:  fileName,
+					ObjectKey: objectKey,
+					Extension: extension,
+					Image:     data,
+				}, opts...)
+
+				if err != nil {
+					return nil, err
+				}
 			}
-		}()
-
-		err = r.ParseMultipartForm(int64(32 << 20))
-		if err != nil {
-			return nil, err
 		}
 
-		var item store.Item
-		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
-		if err != nil {
-			return nil, err
-		}
-
-		var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
-
-		file, _, err := r.FormFile("thumbnail")
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
-
-		thumbnail, fileName, extension, err := util.ImageProcessor(ctx, file, &util.FileMetadata{ContetntType: "image"})
-		if err != nil {
-			return nil, err
-		}
-
-		objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
-		item = store.Item{
-			Id:          primitive.NewObjectID(),
-			Name:        r.FormValue("name"),
-			Price:       price,
-			Ingridients: ingridients,
-			Thumbnail:   objectKey,
-			Summary:     r.FormValue("summary"),
-			Category:    r.FormValue("category"),
-			Description: r.FormValue("description"),
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
-		}
+		item.Id = primitive.NewObjectID()
+		item.CreatedAt = time.Now()
+		item.UpdatedAt = time.Now()
+		
 		_, err = collection.InsertOne(ctx, item)
-		if err != nil {
-			return nil, err
-		}
-
-		opts := []asynq.Option{
-			asynq.MaxRetry(3),
-			asynq.ProcessIn(2 * time.Second),
-			asynq.Queue(workers.CriticalQueue),
-		}
-
-		err = s.distributor.SendS3ObjectUploadTask(ctx, &workers.PayloadUploadImage{
-			FileName:  fileName,
-			ObjectKey: objectKey,
-			Extension: extension,
-			Image:     thumbnail,
-		}, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -310,7 +346,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		if err != nil {
 			return nil, err
 		}
-		
+
 		return product, nil
 	}, &options.TransactionOptions{})
 

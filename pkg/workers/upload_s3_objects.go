@@ -54,5 +54,6 @@ func (processor *RedisTaskServerProcessor) ProcessTaskUploadS3Object(ctx context
 		return err
 	}
 
+	fmt.Printf("taks processing finished at %+v\n", time.Now())
 	return nil
 }
