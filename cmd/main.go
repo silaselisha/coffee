@@ -7,6 +7,8 @@ import (
 
 	"log"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/pkg/handler"
 	"github.com/silaselisha/coffee-api/pkg/store"
@@ -44,7 +46,17 @@ func main() {
 	distributor := workers.NewTaskClientDistributor(redisOpts)
 	querier := handler.NewServer(ctx, mongo_client, distributor)
 	server := querier.(*handler.Server)
-	go taskProcessor(redisOpts, server.Store, *envs)
+
+	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error { return nil })
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+	client := util.NewS3Client(cfg, func(o *s3.Options) {
+		o.Region = "us-east-1"
+	})
+
+	go taskProcessor(redisOpts, server.Store, *envs, client)
 
 	err = http.ListenAndServe(envs.SERVER_ADDRESS, server.Router)
 	if err != nil {
@@ -53,8 +65,8 @@ func main() {
 	}
 }
 
-func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs util.Config) {
-	processor := workers.NewTaskServerProcessor(opts, store, envs)
+func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs util.Config, client *util.CoffeeShopBucket) {
+	processor := workers.NewTaskServerProcessor(opts, store, envs, client)
 	log.Print("worker process on")
 	err := processor.Start()
 	if err != nil {

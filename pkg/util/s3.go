@@ -21,7 +21,7 @@ func NewS3Client(config aws.Config, opts ...func(*s3.Options)) *CoffeeShopBucket
 	}
 }
 
-func (csb *CoffeeShopBucket) UploadImage(ctx context.Context, fileName string, objectKey string, bucketName string, extension string, image []byte) error {
+func (csb *CoffeeShopBucket) UploadImage(ctx context.Context, objectKey string, bucketName string, extension string, image []byte) error {
 	body := bytes.NewBuffer(image)
 	_, err := csb.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(bucketName),
@@ -32,9 +32,29 @@ func (csb *CoffeeShopBucket) UploadImage(ctx context.Context, fileName string, o
 	})
 
 	if err != nil {
+		fmt.Println(err)
 		return fmt.Errorf("error occured while uploading the image to AWS s3 bucket %w", err)
 	}
 
+	return nil
+}
+
+func (csb *CoffeeShopBucket) UploadMultipleImages(ctx context.Context, payload []*PayloadUploadImage, bucket string) error {
+	for _, image := range payload {
+		body := bytes.NewBuffer(image.Image)
+		_, err := csb.client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket:      aws.String(bucket),
+			Key:         aws.String(image.ObjectKey),
+			Body:        body,
+			ACL:         types.ObjectCannedACL(*aws.String("public-read")),
+			ContentType: aws.String(fmt.Sprintf("image/%s", image.Extension)),
+		})
+
+		if err != nil {
+			fmt.Println(err)
+			return fmt.Errorf("error occured while uploading the image to AWS s3 bucket %w", err)
+		}
+	}
 	return nil
 }
 

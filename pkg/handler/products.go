@@ -2,15 +2,20 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/util"
+	"github.com/silaselisha/coffee-api/pkg/workers"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -205,80 +210,192 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 }
 
 func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.Store.Collection(ctx, "coffeeshop", "products")
-
-	_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "name", Value: 1}},
-		Options: options.Index().SetUnique(true),
-	})
+	session, err := s.Store.TxnStartSession(ctx)
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	err = r.ParseMultipartForm(int64(32 << 20))
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
-
-	thumbnailName := make(chan string)
-	errs := make(chan error)
-	go func() {
-		file, _, err := r.FormFile("thumbnail")
-		if err != nil {
-			errs <- err
-			return
+	defer func() {
+		if abortError := session.AbortTransaction(ctx); err != nil {
+			err = abortError
 		}
-
-		thumbnailName <- ""
-		close(thumbnailName)
-		defer file.Close()
 	}()
+	defer session.EndSession(ctx)
 
-	var item store.Item
-	price, err := strconv.ParseFloat(r.FormValue("price"), 64)
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
-	}
+	resposne, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		collection := s.Store.Collection(ctx, "coffeeshop", "products")
+		_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: "name", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		})
 
-	select {
-	case err := <-errs:
 		if err != nil {
-			fmt.Println(err.Error())
-			return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+			return nil, err
 		}
 
-	case fileName, ok := <-thumbnailName:
-		if !ok {
-			break
+		var item store.Item
+		var images []*util.PayloadUploadImage
+		reader, err := r.MultipartReader()
+		if err != nil {
+			return nil, err
 		}
-		item.Thumbnail = fileName
-	}
 
-	var ingridients []string = strings.Split(r.FormValue("ingridients"), ",")
+		for {
+			curr, err := reader.NextPart()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, err
+			}
 
-	item = store.Item{
-		Id:          primitive.NewObjectID(),
-		Name:        r.FormValue("name"),
-		Price:       price,
-		Ingridients: ingridients,
-		Summary:     r.FormValue("summary"),
-		Category:    r.FormValue("category"),
-		Description: r.FormValue("description"),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
+			switch curr.FormName() {
+			case "price":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				price, err := strconv.ParseFloat(string(data), 64)
+				if err != nil {
+					return nil, err
+				}
+				item.Price = price
 
-	_, err = collection.InsertOne(ctx, item)
+			case "ingridients":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				ingridients := strings.Split(string(data), ",")
+				item.Ingridients = ingridients
+			case "name":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				item.Name = string(data)
+			case "summary":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				item.Summary = string(data)
+			case "description":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				item.Description = string(data)
+			case "category":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				item.Category = string(data)
+
+			case "thumbnail":
+				data, fileName, extension, err := util.ImageProcessor(ctx, curr, &util.FileMetadata{ContetntType: "image"})
+				if err != nil {
+					return nil, err
+				}
+
+				objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
+				item.Thumbnail = objectKey
+				opts := []asynq.Option{
+					asynq.MaxRetry(3),
+					asynq.ProcessIn(2 * time.Second),
+					asynq.Queue(workers.CriticalQueue),
+				}
+
+				err = s.distributor.SendS3ObjectUploadTask(ctx, &util.PayloadUploadImage{
+					ObjectKey: objectKey,
+					Extension: extension,
+					Image:     data,
+				}, opts...)
+
+				if err != nil {
+					return nil, err
+				}
+
+			case "images":
+				data, fileName, extension, err := util.ImageProcessor(ctx, curr, &util.FileMetadata{ContetntType: "image"})
+				if err != nil {
+					return nil, err
+				}
+				objectKey := fmt.Sprintf("images/products/beverages/%s", fileName)
+				images = append(images, &util.PayloadUploadImage{
+					Image:     data,
+					Extension: extension,
+					ObjectKey: objectKey,
+				})
+				item.Images = append(item.Images, objectKey)
+			}
+		}
+
+		opts := []asynq.Option{
+			asynq.MaxRetry(3),
+			asynq.ProcessIn(2 * time.Second),
+			asynq.Queue(workers.CriticalQueue),
+		}
+		err = s.distributor.SendMultipleS3ObjectUploadTask(ctx, images, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		item.Id = primitive.NewObjectID()
+		item.CreatedAt = time.Now()
+		item.UpdatedAt = time.Now()
+
+		_, err = collection.InsertOne(ctx, item)
+		if err != nil {
+			return nil, err
+		}
+
+		product := itemResponseParams{
+			Id:          item.Id.Hex(),
+			Images:      item.Images,
+			Name:        item.Name,
+			Price:       item.Price,
+			Ingridients: item.Ingridients,
+			Thumbnail:   item.Thumbnail,
+			Summary:     item.Summary,
+			Category:    item.Category,
+			Description: item.Description,
+			CreatedAt:   item.CreatedAt,
+			UpdatedAt:   item.UpdatedAt,
+		}
+
+		err = session.CommitTransaction(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return product, nil
+	}, &options.TransactionOptions{})
+
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		switch {
+		case errors.As(err, &mongo.WriteException{}):
+			exceptionError, _ := err.(mongo.WriteException)
+			if exceptionError.WriteErrors[0].Code == 11000 {
+				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+			}
+
+		case errors.Is(err, &json.SyntaxError{}):
+			return util.ResponseHandler(w, fmt.Errorf("ivalid data input for operation %w", err).Error(), http.StatusBadRequest)
+
+		default:
+			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 
+	product := resposne.(itemResponseParams)
 	result := struct {
-		Status string     `json:"status"`
-		Data   store.Item `json:"data"`
+		Status string             `json:"status"`
+		Data   itemResponseParams `json:"data"`
 	}{
 		Status: "success",
-		Data:   item,
+		Data:   product,
 	}
 
 	return util.ResponseHandler(w, result, http.StatusCreated)

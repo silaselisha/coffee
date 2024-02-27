@@ -27,3 +27,13 @@ type Config struct {
 type FileMetadata struct {
 	ContetntType string
 }
+
+type PayloadUploadImage struct {
+	Image     []byte `json:"image"`
+	ObjectKey string `json:"objectKey"`
+	Extension string `json:"extension"`
+}
+
+type PayloadSendMail struct {
+	Email string `json:"email"`
+}
