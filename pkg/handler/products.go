@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -323,7 +325,19 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 	}, &options.TransactionOptions{})
 
 	if err != nil {
-		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+		switch {
+		case errors.As(err, &mongo.WriteException{}):
+			exceptionError, _ := err.(mongo.WriteException)
+			if exceptionError.WriteErrors[0].Code == 11000 {
+				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+			}
+
+		case errors.Is(err, &json.SyntaxError{}):
+			return util.ResponseHandler(w, fmt.Errorf("ivalid data input for operation %w", err).Error(), http.StatusBadRequest)
+
+		default:
+			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 
 	product := resposne.(itemResponseParams)
