@@ -32,7 +32,7 @@ func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs u
 	server := asynq.NewServer(opts, asynq.Config{
 		Queues: map[string]int{CriticalQueue: 1, DefaultQueue: 2},
 		ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, err error) {
-			log.Error().Err(err).Str("type", task.Type()).Bytes("payload", task.Payload()).Msg("process failed")
+			log.Error().Err(err).Str("type", task.Type()).Msg("process failed")
 		}),
 	})
 

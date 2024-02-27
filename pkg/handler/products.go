@@ -221,6 +221,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			Keys:    bson.D{{Key: "name", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		})
+
 		if err != nil {
 			if err := session.AbortTransaction(ctx); err != nil {
 				return nil, err
@@ -228,20 +229,20 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
+		defer func() {
+			if abortError := session.AbortTransaction(ctx); err != nil {
+				err = abortError
+			}
+		}()
+
 		err = r.ParseMultipartForm(int64(32 << 20))
 		if err != nil {
-			if err := session.AbortTransaction(ctx); err != nil {
-				return nil, err
-			}
 			return nil, err
 		}
 
 		var item store.Item
 		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
 		if err != nil {
-			if err := session.AbortTransaction(ctx); err != nil {
-				return nil, err
-			}
 			return nil, err
 		}
 
@@ -249,18 +250,12 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 
 		file, _, err := r.FormFile("thumbnail")
 		if err != nil {
-			if err := session.AbortTransaction(ctx); err != nil {
-				return nil, err
-			}
 			return nil, err
 		}
 		defer file.Close()
 
 		thumbnail, fileName, extension, err := util.ImageProcessor(ctx, file, &util.FileMetadata{ContetntType: "image"})
 		if err != nil {
-			if err := session.AbortTransaction(ctx); err != nil {
-				return nil, err
-			}
 			return nil, err
 		}
 
@@ -279,9 +274,6 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		}
 		_, err = collection.InsertOne(ctx, item)
 		if err != nil {
-			if err := session.AbortTransaction(ctx); err != nil {
-				return nil, err
-			}
 			return nil, err
 		}
 
@@ -298,9 +290,6 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			Image:     thumbnail,
 		}, opts...)
 		if err != nil {
-			if err := session.AbortTransaction(ctx); err != nil {
-				return nil, err
-			}
 			return nil, err
 		}
 
@@ -321,6 +310,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		if err != nil {
 			return nil, err
 		}
+		
 		return product, nil
 	}, &options.TransactionOptions{})
 

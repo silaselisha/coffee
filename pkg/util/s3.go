@@ -32,6 +32,7 @@ func (csb *CoffeeShopBucket) UploadImage(ctx context.Context, fileName string, o
 	})
 
 	if err != nil {
+		fmt.Println(err)
 		return fmt.Errorf("error occured while uploading the image to AWS s3 bucket %w", err)
 	}
 
