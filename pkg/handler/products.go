@@ -465,18 +465,26 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 }
 
 func productRoutes(gmux *mux.Router, srv *Server) {
-	getProductRouter := gmux.Methods(http.MethodGet).Subrouter()
-	postProductRouter := gmux.Methods(http.MethodPost).Subrouter()
-	deleteProductRouter := gmux.Methods(http.MethodDelete).Subrouter()
-	updateProductRouter := gmux.Methods(http.MethodPut).Subrouter()
+	getItemsRouter := gmux.Methods(http.MethodGet).Subrouter()
+	postItemsRouter := gmux.Methods(http.MethodPost).Subrouter()
+	deleteItemsRouter := gmux.Methods(http.MethodDelete).Subrouter()
+	updateItemsRouter := gmux.Methods(http.MethodPut).Subrouter()
 
-	postProductRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.CreateProductHandler))
-	getProductRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.GetAllProductsHandler))
-	getProductRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(srv.GetProductByIdHandler))
+	postItemsRouter.Use(middleware.AuthMiddleware(srv.token))
+	postProductsRouter := postItemsRouter.PathPrefix("/").Subrouter()
+	postProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
+	postProductsRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.CreateProductHandler))
 
-	deleteProductRouter.Use(middleware.AuthMiddleware(srv.token))
-	deleteProductByIDRouter := deleteProductRouter.PathPrefix("/products").Subrouter()
-	deleteProductByIDRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	deleteProductByIDRouter.HandleFunc("/{id}", util.HandleFuncDecorator(srv.DeleteProductByIdHandler))
-	updateProductRouter.HandleFunc("/products/{id}", util.HandleFuncDecorator(srv.UpdateProductHandler))
+	getItemsRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.GetAllProductsHandler))
+	getItemsRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(srv.GetProductByIdHandler))
+
+	deleteItemsRouter.Use(middleware.AuthMiddleware(srv.token))
+	deleteProductsRouter := deleteItemsRouter.PathPrefix("/products").Subrouter()
+	deleteProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
+	deleteProductsRouter.HandleFunc("/{id}", util.HandleFuncDecorator(srv.DeleteProductByIdHandler))
+
+	updateItemsRouter.Use(middleware.AuthMiddleware(srv.token))
+	updateProductsRouter := updateItemsRouter.PathPrefix("/products").Subrouter()
+	updateProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
+	updateProductsRouter.HandleFunc("/{id}", util.HandleFuncDecorator(srv.UpdateProductHandler))
 }
