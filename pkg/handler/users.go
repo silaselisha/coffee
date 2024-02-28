@@ -140,8 +140,8 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		}
 
 		opts := []asynq.Option{
-			asynq.MaxRetry(10),
-			asynq.ProcessIn(1 * time.Minute),
+			asynq.MaxRetry(3),
+			asynq.ProcessIn(3 * time.Second),
 			asynq.Queue(workers.CriticalQueue),
 		}
 		err = s.distributor.SendVerificationMailTask(ctx, &util.PayloadSendMail{Email: user.Email}, opts...)
@@ -274,9 +274,9 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	payload := ctx.Value(middleware.AuthPayloadKey{}).(*token.Payload)
-	role := ctx.Value(middleware.AuthRoleKey{}).(string)
+	userInfo := ctx.Value(middleware.AuthRoleKey{}).(*middleware.UserInfo)
 
-	if payload.Id != id.Hex() && role != "admin" {
+	if payload.Id != id.Hex() && userInfo.Role != "admin" {
 		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
 	}
 
@@ -389,8 +389,11 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	filter := bson.D{{Key: "_id", Value: id}}
 	update := bson.M{"$set": data}
 
+	newDocs := options.After
 	var updatedDocument store.User
-	err = collection.FindOneAndUpdate(ctx, filter, update).Decode(&updatedDocument)
+	err = collection.FindOneAndUpdate(ctx, filter, update, &options.FindOneAndUpdateOptions{
+		ReturnDocument: &newDocs,
+	}).Decode(&updatedDocument)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -399,10 +402,24 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 	}
 
+	updatedUser := userResponseParams{
+		Id:          updatedDocument.Id.Hex(),
+		Avatar:      updatedDocument.Avatar,
+		UserName:    updatedDocument.UserName,
+		Role:        updatedDocument.Role,
+		Email:       updatedDocument.Email,
+		PhoneNumber: updatedDocument.PhoneNumber,
+		Verified:    updatedDocument.Verified,
+		CreatedAt:   updatedDocument.CreatedAt,
+		UpdatedAt:   updatedDocument.UpdatedAt,
+	}
+
 	result := struct {
-		Status string `json:"status"`
+		Status string             `json:"status"`
+		Data   userResponseParams `json:"data"`
 	}{
 		Status: "success",
+		Data:   updatedUser,
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }

@@ -18,6 +18,7 @@ type TaskProcessor interface {
 	Start() error
 	ProcessTaskSendVerificationMail(ctx context.Context, task *asynq.Task) error
 	ProcessTaskUploadS3Object(ctx context.Context, task *asynq.Task) error
+	ProcessTaskDeleteS3Object(ctx context.Context, task *asynq.Task) error
 	ProcessTaskMultipleUploadS3Object(ctx context.Context, task *asynq.Task) error
 }
 
