@@ -70,29 +70,30 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 				return nil, err
 			}
 
-			switch curr.FileName() {
+			switch curr.FormName() {
 			case "name":
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
 				}
-				updates[curr.FileName()] = string(data)
+				updates[curr.FormName()] = string(data)
 
 			case "summary":
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
 				}
-				updates[curr.FileName()] = string(data)
+				updates[curr.FormName()] = string(data)
 
 			case "description":
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
 				}
-				updates[curr.FileName()] = string(data)
+				updates[curr.FormName()] = string(data)
 
 			case "price":
+				fmt.Println("price...")
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
@@ -102,14 +103,15 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 				if err != nil {
 					return nil, err
 				}
-				updates[curr.FileName()] = price
+				fmt.Println(price)
+				updates[curr.FormName()] = price
 
 			case "ingridients":
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
 				}
-				updates[curr.FileName()] = strings.Split(string(data), ",")
+				updates[curr.FormName()] = strings.Split(string(data), ",")
 
 			case "thumbnail":
 				data, err := io.ReadAll(curr)
@@ -152,16 +154,20 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 				if err != nil {
 					return nil, err
 				}
-				updates[curr.FileName()] = objectKey
+				updates[curr.FormName()] = objectKey
 			}
 
 		}
 
 		var updatedDocument store.Item
 		filter := bson.D{{Key: "_id", Value: id}}
+		updates["updated_at"] = time.Now()
 		update := bson.M{"$set": updates}
 
-		err = collection.FindOneAndUpdate(ctx, filter, update).Decode(&updatedDocument)
+		newDocs := options.After
+		err = collection.FindOneAndUpdate(ctx, filter, update, &options.FindOneAndUpdateOptions{
+			ReturnDocument: &newDocs,
+		}).Decode(&updatedDocument)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				return nil, err
