@@ -15,6 +15,10 @@ import (
 
 type AuthPayloadKey struct{}
 type AuthRoleKey struct{}
+type UserInfo struct {
+	Role string
+	Id   primitive.ObjectID
+}
 
 func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -98,8 +102,13 @@ func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handle
 				http.Error(w, err.Error(), http.StatusForbidden)
 				return
 			}
+
+			var userInfo *UserInfo = &UserInfo{
+				Role: role,
+				Id: id,
+			}
 			
-			ctx := context.WithValue(r.Context(), AuthRoleKey{}, role)
+			ctx := context.WithValue(r.Context(), AuthRoleKey{}, userInfo)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})
