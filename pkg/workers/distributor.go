@@ -12,6 +12,7 @@ type TaskDistributor interface {
 	SendPasswordResetMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error
 	SendS3ObjectUploadTask(ctx context.Context, payload *util.PayloadUploadImage, opts ...asynq.Option) error
 	SendMultipleS3ObjectUploadTask(ctx context.Context, payload []*util.PayloadUploadImage, opts ...asynq.Option) error
+	SendS3ObjectDeleteTask(ctx context.Context, images []string, opts ...asynq.Option) error
 }
 
 type RedisTaskClientDistributor struct {
