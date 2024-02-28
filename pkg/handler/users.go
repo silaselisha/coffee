@@ -274,9 +274,9 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	payload := ctx.Value(middleware.AuthPayloadKey{}).(*token.Payload)
-	role := ctx.Value(middleware.AuthRoleKey{}).(string)
+	userInfo := ctx.Value(middleware.AuthRoleKey{}).(*middleware.UserInfo)
 
-	if payload.Id != id.Hex() && role != "admin" {
+	if payload.Id != id.Hex() && userInfo.Role != "admin" {
 		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
 	}
 

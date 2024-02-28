@@ -435,6 +435,10 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
+	
+		payload := ctx.Value(middleware.AuthRoleKey{}).(*middleware.UserInfo)
+		item.User = payload.Id
+
 		for {
 			curr, err := reader.NextPart()
 			if err != nil {
