@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,66 +25,192 @@ import (
 )
 
 func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	collection := s.Store.Collection(ctx, "coffeeshop", "products")
-
-	vars := mux.Vars(r)
-	id, err := primitive.ObjectIDFromHex(vars["id"])
+	session, err := s.Store.TxnStartSession(ctx)
 	if err != nil {
-		return util.ResponseHandler(w, "invalid product", http.StatusBadRequest)
+		return err
 	}
 
-	err = r.ParseMultipartForm(int64(32 << 20))
-	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	fields := []string{"name", "price", "ingridients", "description", "summary"}
-	data := bson.M{}
-	for _, field := range fields {
-		value := r.FormValue(field)
-		if value != "" {
-			data[field] = r.FormValue(field)
+	defer func() {
+		if abortErr := session.AbortTransaction(ctx); abortErr != nil {
+			err = abortErr
 		}
-	}
+	}()
 
-	if data["price"] != "" {
-		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
+	response, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		collection := s.Store.Collection(ctx, "coffeeshop", "products")
+		vars := mux.Vars(r)
+		id, err := primitive.ObjectIDFromHex(vars["id"])
 		if err != nil {
+			return nil, err
+		}
+
+		// query database to fetch the document to update
+		var item store.Item
+		curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
+		err = curr.Decode(&item)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, err
+			}
+			return nil, err
+		}
+
+		var updates bson.M = bson.M{}
+		reader, err := r.MultipartReader()
+		if err != nil {
+			return nil, err
+		}
+
+		for {
+			curr, err := reader.NextPart()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, err
+			}
+
+			switch curr.FileName() {
+			case "name":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				updates[curr.FileName()] = string(data)
+
+			case "summary":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				updates[curr.FileName()] = string(data)
+
+			case "description":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				updates[curr.FileName()] = string(data)
+
+			case "price":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+
+				price, err := strconv.ParseFloat(string(data), 64)
+				if err != nil {
+					return nil, err
+				}
+				updates[curr.FileName()] = price
+
+			case "ingridients":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				updates[curr.FileName()] = strings.Split(string(data), ",")
+
+			case "thumbnail":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+
+				opts := []asynq.Option{
+					asynq.MaxRetry(3),
+					asynq.ProcessIn(2 * time.Second),
+					asynq.Queue(workers.CriticalQueue),
+				}
+
+				if item.Thumbnail != "" {
+					opts := []asynq.Option{
+						asynq.MaxRetry(3),
+						asynq.ProcessIn(3 * time.Minute),
+						asynq.Queue(workers.CriticalQueue),
+					}
+
+					thumbnails := []string{item.Thumbnail}
+					err := s.distributor.SendS3ObjectDeleteTask(ctx, thumbnails, opts...)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				imageFile := io.NopCloser(bytes.NewReader(data))
+				image, fileName, extension, err := util.ImageProcessor(ctx, imageFile, &util.FileMetadata{ContetntType: "image"})
+				if err != nil {
+					return nil, err
+				}
+
+				objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
+				err = s.distributor.SendS3ObjectUploadTask(ctx, &util.PayloadUploadImage{
+					Image:     image,
+					Extension: extension,
+					ObjectKey: objectKey,
+				}, opts...)
+				if err != nil {
+					return nil, err
+				}
+				updates[curr.FileName()] = objectKey
+			}
+
+		}
+
+		var updatedDocument store.Item
+		filter := bson.D{{Key: "_id", Value: id}}
+		update := bson.M{"$set": updates}
+
+		err = collection.FindOneAndUpdate(ctx, filter, update).Decode(&updatedDocument)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, err
+			}
+			return nil, err
+		}
+
+		product := itemResponseParams{
+			Id:          updatedDocument.Id.Hex(),
+			Images:      updatedDocument.Images,
+			Name:        updatedDocument.Name,
+			Price:       updatedDocument.Price,
+			Summary:     updatedDocument.Summary,
+			Category:    updatedDocument.Category,
+			Thumbnail:   updatedDocument.Thumbnail,
+			Description: updatedDocument.Description,
+			Ingridients: updatedDocument.Ingridients,
+			Ratings:     updatedDocument.Ratings,
+			CreatedAt:   updatedDocument.CreatedAt,
+			UpdatedAt:   updatedDocument.UpdatedAt,
+		}
+
+		err = session.CommitTransaction(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return product, nil
+	}, &options.TransactionOptions{})
+
+	if err != nil {
+		switch {
+		case errors.As(err, &mongo.WriteException{}):
+			exception, _ := err.(mongo.WriteException)
+			if exception.WriteErrors[0].Code == 11000 {
+				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+			}
+
+		case errors.Is(err, mongo.ErrNoDocuments):
+			if err == mongo.ErrNoDocuments {
+				return fmt.Errorf("document not found %w", err)
+			}
+
+		case errors.Is(err, &json.SyntaxError{}):
+			return util.ResponseHandler(w, fmt.Errorf("ivalid data input for operation %w", err).Error(), http.StatusBadRequest)
+
+		default:
 			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
 		}
-		data["price"] = price
-	}
-
-	if data["ingridients"] != "" {
-		var result []string = strings.Split(r.FormValue("ingridients"), ",")
-		data["ingridients"] = result
-	}
-
-	var updatedDocument store.Item
-	filter := bson.D{{Key: "_id", Value: id}}
-	update := bson.M{"$set": data}
-
-	err = collection.FindOneAndUpdate(ctx, filter, update).Decode(&updatedDocument)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, err, http.StatusNotFound)
-		}
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
-	}
-
-	product := itemResponseParams{
-		Id:          updatedDocument.Id.Hex(),
-		Images:      updatedDocument.Images,
-		Name:        updatedDocument.Name,
-		Price:       updatedDocument.Price,
-		Summary:     updatedDocument.Summary,
-		Category:    updatedDocument.Category,
-		Thumbnail:   updatedDocument.Thumbnail,
-		Description: updatedDocument.Description,
-		Ingridients: updatedDocument.Ingridients,
-		Ratings:     updatedDocument.Ratings,
-		CreatedAt:   updatedDocument.CreatedAt,
-		UpdatedAt:   updatedDocument.UpdatedAt,
 	}
 
 	result := struct {
@@ -91,7 +218,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		Data   itemResponseParams `json:"data"`
 	}{
 		Status: "success",
-		Data:   product,
+		Data:   response.(itemResponseParams),
 	}
 	return util.ResponseHandler(w, result, http.StatusOK)
 }
@@ -331,24 +458,28 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 				}
 				ingridients := strings.Split(string(data), ",")
 				item.Ingridients = ingridients
+
 			case "name":
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
 				}
 				item.Name = string(data)
+
 			case "summary":
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
 				}
 				item.Summary = string(data)
+
 			case "description":
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
 				}
 				item.Description = string(data)
+
 			case "category":
 				data, err := io.ReadAll(curr)
 				if err != nil {
