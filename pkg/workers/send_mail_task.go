@@ -58,15 +58,19 @@ func (processor *RedisTaskServerProcessor) ProcessTaskSendVerificationMail(ctx c
 		return fmt.Errorf("error occured while retreiving user %w", err)
 	}
 
+	fmt.Printf("BEGIN @%+v\n", time.Now())
+	fmt.Printf("start processing task %+s\n", task.Type())
+
 	transporter := util.NewSMTPTransporter(&processor.envs)
 	message := fmt.Sprintf("http://localhost:3000/verify?token=%s&timestamp=%d", user.Id.Hex(), util.ResetToken(2880))
-
+	
 	err = transporter.MailSender(ctx, user.Email, []byte(message))
 	if err != nil {
+		fmt.Println(err)
 		return fmt.Errorf("error occured while sending a verification mail to %s at %v err %w", user.Email, time.Now(), err)
 	}
 
-	fmt.Printf("processing %s at %v\n", task.Type(), time.Now())
+	fmt.Printf("END @%+v\n", time.Now())
 	return nil
 }
 

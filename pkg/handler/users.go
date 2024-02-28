@@ -140,8 +140,8 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		}
 
 		opts := []asynq.Option{
-			asynq.MaxRetry(10),
-			asynq.ProcessIn(1 * time.Minute),
+			asynq.MaxRetry(3),
+			asynq.ProcessIn(3 * time.Second),
 			asynq.Queue(workers.CriticalQueue),
 		}
 		err = s.distributor.SendVerificationMailTask(ctx, &util.PayloadSendMail{Email: user.Email}, opts...)

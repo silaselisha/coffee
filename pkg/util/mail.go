@@ -21,12 +21,11 @@ func NewSMTPTransporter(envs *Config) Transporter {
 }
 
 func (stp *SMTPTransport) MailSender(ctx context.Context, receiver string, message []byte) error {
-	auth := smtp.PlainAuth("", stp.Sender, stp.Password, stp.Host)
+	auth := smtp.PlainAuth("", stp.Username, stp.Password, stp.Host)
 	SMTP_URL := fmt.Sprintf("%s:%s", stp.Host, stp.Port)
-	fmt.Println(SMTP_URL)
 	to := []string{receiver}
+
 	err := smtp.SendMail(SMTP_URL, auth, stp.Sender, to, message)
-	
 	if err != nil {
 		return err
 	}
