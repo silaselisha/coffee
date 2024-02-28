@@ -93,7 +93,6 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 				updates[curr.FormName()] = string(data)
 
 			case "price":
-				fmt.Println("price...")
 				data, err := io.ReadAll(curr)
 				if err != nil {
 					return nil, err
@@ -103,7 +102,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 				if err != nil {
 					return nil, err
 				}
-				fmt.Println(price)
+
 				updates[curr.FormName()] = price
 
 			case "ingridients":
