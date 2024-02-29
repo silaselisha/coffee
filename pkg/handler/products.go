@@ -407,15 +407,15 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	session, err := s.Store.TxnStartSession(ctx)
 	if err != nil {
-		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+		return session.AbortTransaction(ctx)
 	}
 
+	defer session.EndSession(ctx)
 	defer func() {
 		if abortError := session.AbortTransaction(ctx); err != nil {
 			err = abortError
 		}
 	}()
-	defer session.EndSession(ctx)
 
 	resposne, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
 		collection := s.Store.Collection(ctx, "coffeeshop", "products")

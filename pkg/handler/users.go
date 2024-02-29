@@ -97,6 +97,11 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	defer session.EndSession(ctx)
+	defer func() {
+		if abortError := session.AbortTransaction(ctx); err != nil {
+			err = abortError
+		}
+	}()
 
 	response, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
 		collection := s.Store.Collection(ctx, "coffeeshop", "users")
@@ -106,7 +111,6 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		})
 
 		if err != nil {
-			session.AbortTransaction(ctx)
 			return nil, err
 		}
 
@@ -115,22 +119,17 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		userBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			if err == io.EOF {
-				session.AbortTransaction(ctx)
 				return nil, err
 			}
-
-			session.AbortTransaction(ctx)
 			return nil, err
 		}
 
 		err = json.Unmarshal(userBytes, &user)
 		if err != nil {
-			session.AbortTransaction(ctx)
 			return nil, err
 		}
 
 		if err := s.vd.Struct(user); err != nil {
-			session.AbortTransaction(ctx)
 			return nil, err
 		}
 
@@ -143,7 +142,6 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		user.UpdatedAt = time.Now()
 		_, err = collection.InsertOne(ctx, user)
 		if err != nil {
-			session.AbortTransaction(ctx)
 			return nil, err
 		}
 
@@ -154,7 +152,6 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		}
 		err = s.distributor.SendVerificationMailTask(ctx, &util.PayloadSendMail{Email: user.Email}, opts...)
 		if err != nil {
-			session.AbortTransaction(ctx)
 			return nil, err
 		}
 
@@ -172,7 +169,6 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 
 		err = session.CommitTransaction(ctx)
 		if err != nil {
-			session.AbortTransaction(ctx)
 			return nil, err
 		}
 
@@ -182,17 +178,17 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	if err != nil {
 		switch {
 		case errors.Is(err, mongo.ErrNoDocuments):
-			return util.ResponseHandler(w, fmt.Errorf("document not found %w", err).Error(), http.StatusNotFound)
+			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		case errors.As(err, &mongo.WriteException{}):
 			wrtExcp, _ := err.(mongo.WriteException)
 			if wrtExcp.WriteErrors[0].Code == 11000 {
-				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 		case errors.Is(err, &json.SyntaxError{}):
-			return util.ResponseHandler(w, fmt.Errorf("invalid data input for operation %w", err).Error(), http.StatusBadRequest)
+			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		default:
-			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
