@@ -36,6 +36,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		}
 	}()
 
+	defer session.EndSession(ctx)
 	response, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
 		collection := s.Store.Collection(ctx, "coffeeshop", "products")
 		vars := mux.Vars(r)
@@ -44,7 +45,6 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
-		// query database to fetch the document to update
 		var item store.Item
 		curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 		err = curr.Decode(&item)
@@ -202,19 +202,19 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		case errors.As(err, &mongo.WriteException{}):
 			exception, _ := err.(mongo.WriteException)
 			if exception.WriteErrors[0].Code == 11000 {
-				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, mongo.ErrNoDocuments):
 			if err == mongo.ErrNoDocuments {
-				return fmt.Errorf("document not found %w", err)
+				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 			}
 
 		case errors.Is(err, &json.SyntaxError{}):
-			return util.ResponseHandler(w, fmt.Errorf("ivalid data input for operation %w", err).Error(), http.StatusBadRequest)
+			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		default:
-			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
@@ -231,18 +231,32 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.Store.Collection(ctx, "coffeeshop", "products")
 
+	var result itemResponseListParams
+	type resp struct {
+		Status  string                 `json:"status"`
+		Results int32                  `json:"results"`
+		Data    itemResponseListParams `json:"data"`
+	}
+
+	productRes := resp{Status: "success", Results: 0, Data: result}
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		if err == mongo.ErrNoDocuments {
+			return util.ResponseHandler(w, productRes, http.StatusOK)
+		}
+
+		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 	defer cur.Close(ctx)
 
-	var result itemResponseListParams
 	for cur.Next(ctx) {
 		item := new(store.Item)
 		err := cur.Decode(&item)
 		if err != nil {
-			return util.ResponseHandler(w, err, http.StatusInternalServerError)
+			if err == io.EOF {
+				break
+			}
+			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 
 		product := itemResponseParams{
@@ -262,16 +276,8 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 		result = append(result, product)
 	}
 
-	resp := struct {
-		Status  string                 `json:"status"`
-		Results int32                  `json:"results"`
-		Data    itemResponseListParams `json:"data"`
-	}{
-		Status:  "success",
-		Results: int32(len(result)),
-		Data:    result,
-	}
-	return util.ResponseHandler(w, resp, http.StatusOK)
+	productRes = resp{Status: "success", Results: int32(len(result)), Data: result}
+	return util.ResponseHandler(w, productRes, http.StatusOK)
 }
 
 func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -280,7 +286,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusBadRequest)
+		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
@@ -290,9 +296,10 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	err = result.Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
+			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
-		return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+
+		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	product := itemResponseParams{
@@ -346,7 +353,7 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 		err = curr.Decode(&product)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
-				return nil, fmt.Errorf("no document found %w", err)
+				return nil, err
 			}
 			return nil, err
 		}
@@ -389,15 +396,14 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 		case errors.As(err, &mongo.WriteException{}):
 			exception, _ := err.(mongo.WriteException)
 			if exception.WriteErrors[0].Code == 11000 {
-				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, mongo.ErrNoDocuments):
-			return util.ResponseHandler(w, fmt.Errorf("document not found %w", err).Error(), http.StatusBadRequest)
+			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 
 		default:
-			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
-
+			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
@@ -410,13 +416,13 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		return session.AbortTransaction(ctx)
 	}
 
-	defer session.EndSession(ctx)
 	defer func() {
 		if abortError := session.AbortTransaction(ctx); err != nil {
 			err = abortError
 		}
 	}()
 
+	defer session.EndSession(ctx)
 	resposne, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
 		collection := s.Store.Collection(ctx, "coffeeshop", "products")
 		_, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
@@ -435,7 +441,6 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
-	
 		payload := ctx.Value(middleware.AuthRoleKey{}).(*middleware.UserInfo)
 		item.User = payload.Id
 
@@ -581,14 +586,14 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		case errors.As(err, &mongo.WriteException{}):
 			exceptionError, _ := err.(mongo.WriteException)
 			if exceptionError.WriteErrors[0].Code == 11000 {
-				return util.ResponseHandler(w, fmt.Errorf("document already exists %w", err).Error(), http.StatusBadRequest)
+				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, &json.SyntaxError{}):
-			return util.ResponseHandler(w, fmt.Errorf("ivalid data input for operation %w", err).Error(), http.StatusBadRequest)
+			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		default:
-			return util.ResponseHandler(w, err.Error(), http.StatusInternalServerError)
+			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
@@ -611,9 +616,9 @@ func productRoutes(gmux *mux.Router, srv *Server) {
 	updateItemsRouter := gmux.Methods(http.MethodPut).Subrouter()
 
 	postItemsRouter.Use(middleware.AuthMiddleware(srv.token))
-	postProductsRouter := postItemsRouter.PathPrefix("/products").Subrouter()
+	postProductsRouter := postItemsRouter.PathPrefix("/").Subrouter()
 	postProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	postProductsRouter.HandleFunc("/", util.HandleFuncDecorator(srv.CreateProductHandler))
+	postProductsRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.CreateProductHandler))
 
 	getItemsRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.GetAllProductsHandler))
 	getItemsRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(srv.GetProductByIdHandler))

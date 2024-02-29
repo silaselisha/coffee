@@ -95,13 +95,13 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 		return session.AbortTransaction(ctx)
 	}
 
-	defer session.EndSession(ctx)
 	defer func() {
 		if abortError := session.AbortTransaction(ctx); err != nil {
 			err = abortError
 		}
 	}()
 
+	defer session.EndSession(ctx)
 	response, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
 		collection := s.Store.Collection(ctx, "coffeeshop", "users")
 		_, err = collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -373,6 +373,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 				return
 			}
 
+			// handle deletion of previous image/avatar/filename
 			fileName <- objectKey
 			close(errs)
 			close(fileName)
