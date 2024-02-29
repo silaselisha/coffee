@@ -32,14 +32,16 @@ import (
 func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	credentialsBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+		response := newErrorResponse("failed", err.Error())
+		return util.ResponseHandler(w, response, http.StatusBadRequest)
 	}
 
 	var credentials userLoginParams
 	json.Unmarshal(credentialsBytes, &credentials)
 	err = s.vd.Struct(credentials)
 	if err != nil {
-		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+		response := newErrorResponse("failed", err.Error())
+		return util.ResponseHandler(w, response, http.StatusBadRequest)
 	}
 
 	var user store.User
@@ -47,13 +49,17 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	curr := collection.FindOne(ctx, bson.D{{Key: "email", Value: credentials.Email}})
 	if err := curr.Decode(&user); err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, "document not found", http.StatusNotFound)
+			response := newErrorResponse("failed", err.Error())
+			return util.ResponseHandler(w, response, http.StatusNotFound)
 		}
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+
+		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	if !util.ComparePasswordEncryption(credentials.Password, user.Password) {
-		return util.ResponseHandler(w, "invalid email or password", http.StatusBadRequest)
+		err := errors.New("invalid user password or email address")
+		response := newErrorResponse("failed", err.Error())
+		return util.ResponseHandler(w, response, http.StatusBadRequest)
 	}
 
 	jwtToken := token.NewToken(s.envs.SECRET_ACCESS_KEY)
@@ -65,12 +71,14 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	hrs := fmt.Sprintf("%dh", (days * 24))
 	duration, err := time.ParseDuration(hrs)
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		response := newErrorResponse("failed", err.Error())
+		return util.ResponseHandler(w, response, http.StatusInternalServerError)
 	}
 
 	token, err := jwtToken.CreateToken(ctx, duration, user.Id.Hex(), user.Email)
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		response := newErrorResponse("failed", err.Error())
+		return util.ResponseHandler(w, response, http.StatusInternalServerError)
 	}
 	res := struct {
 		Status string `json:"status"`
@@ -277,7 +285,7 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	userInfo := ctx.Value(middleware.AuthRoleKey{}).(*middleware.UserInfo)
 
 	if payload.Id != id.Hex() && userInfo.Role != "admin" {
-		return util.ResponseHandler(w, "login or signup to perform this request", http.StatusForbidden)
+		return util.ResponseHandler(w, "user only allowed to retrive their person account", http.StatusForbidden)
 	}
 
 	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
