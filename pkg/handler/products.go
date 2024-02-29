@@ -611,9 +611,9 @@ func productRoutes(gmux *mux.Router, srv *Server) {
 	updateItemsRouter := gmux.Methods(http.MethodPut).Subrouter()
 
 	postItemsRouter.Use(middleware.AuthMiddleware(srv.token))
-	postProductsRouter := postItemsRouter.PathPrefix("/").Subrouter()
+	postProductsRouter := postItemsRouter.PathPrefix("/products").Subrouter()
 	postProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	postProductsRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.CreateProductHandler))
+	postProductsRouter.HandleFunc("/", util.HandleFuncDecorator(srv.CreateProductHandler))
 
 	getItemsRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.GetAllProductsHandler))
 	getItemsRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(srv.GetProductByIdHandler))
