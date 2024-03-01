@@ -263,6 +263,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 			Id:          item.Id.Hex(),
 			Images:      item.Images,
 			Name:        item.Name,
+			Author:      item.Author,
 			Price:       item.Price,
 			Summary:     item.Summary,
 			Category:    item.Category,
@@ -306,6 +307,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		Id:          item.Id.Hex(),
 		Images:      item.Images,
 		Name:        item.Name,
+		Author:      item.Author,
 		Price:       item.Price,
 		Summary:     item.Summary,
 		Category:    item.Category,
@@ -442,7 +444,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		}
 
 		payload := ctx.Value(middleware.AuthRoleKey{}).(*middleware.UserInfo)
-		item.User = payload.Id
+		item.Author = payload.Id
 
 		for {
 			curr, err := reader.NextPart()
@@ -563,6 +565,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			Id:          item.Id.Hex(),
 			Images:      item.Images,
 			Name:        item.Name,
+			Author:      item.Author,
 			Price:       item.Price,
 			Ingridients: item.Ingridients,
 			Thumbnail:   item.Thumbnail,

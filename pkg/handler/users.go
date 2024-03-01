@@ -373,7 +373,25 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 				return
 			}
 
-			// handle deletion of previous image/avatar/filename
+			err = s.distributor.SendS3ObjectUploadTask(ctx, &util.PayloadUploadImage{
+				Image:     data,
+				ObjectKey: objectKey,
+				Extension: extension,
+			}, []asynq.Option{asynq.ProcessIn(1 * time.Second),
+				asynq.MaxRetry(3),
+				asynq.Queue(workers.CriticalQueue)}...)
+
+			if err != nil {
+				errs <- err
+			}
+			err = s.distributor.SendS3ObjectDeleteTask(ctx, []string{user.Avatar}, []asynq.Option{asynq.ProcessIn(3 * time.Minute),
+				asynq.MaxRetry(3),
+				asynq.Queue(workers.CriticalQueue)}...)
+			if err != nil {
+				errs <- err
+				return
+			}
+
 			fileName <- objectKey
 			close(errs)
 			close(fileName)
