@@ -13,7 +13,7 @@ type Item struct {
 	Price       float64            `bson:"price" validate:"required"`
 	Summary     string             `bson:"summary" validate:"required"`
 	Category    string             `bson:"category" validate:"required,oneof=beverages snacks"`
-	User        primitive.ObjectID `bson:"user"`
+	Author        primitive.ObjectID `bson:"author"`
 	Thumbnail   string             `bson:"thumbnail"`
 	Description string             `bson:"description" validate:"required"`
 	Ingridients []string           `bson:"ingridients" validate:"required"`
