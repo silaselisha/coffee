@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/pkg/gapi"
 	"github.com/silaselisha/coffee-api/pkg/handler"
@@ -63,8 +64,9 @@ func main() {
 		o.Region = "us-east-1"
 	})
 
-	go startGrpcServer(envs, mongo_client)
+	go startGrpcGatewayServer(envs, mongo_client)
 	go taskProcessor(redisOpts, server.Store, *envs, client)
+	go startGrpcServer(envs, mongo_client)
 
 	fmt.Printf("serving HTTP/REST server\n")
 	fmt.Printf("http://localhost:%v/\n", envs.SERVER_REST_ADDRESS)
@@ -73,6 +75,35 @@ func main() {
 	if err != nil {
 		log.Panic()
 		return
+	}
+}
+
+func startGrpcGatewayServer(envs *util.Config, mongo *mongo.Client) {
+	server := gapi.NewServer(envs, mongo)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	grpcMux := runtime.NewServeMux()
+	err := pb.RegisterOrderServiceHandlerServer(ctx, grpcMux, server)
+	if err != nil {
+		fmt.Print("failed to register order service hanlder server")
+		log.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/", grpcMux)
+	listener, err := net.Listen("tcp", envs.SERVER_GRPC_GATEWAY_ADDRESS)
+	if err != nil {
+		fmt.Print("tcp listener not established")
+		log.Fatal(err)
+	}
+
+	fmt.Printf("serving gRPC Gateway server\n")
+	fmt.Printf("http://localhost:%v/\n", envs.SERVER_GRPC_GATEWAY_ADDRESS)
+	err = http.Serve(listener, mux)
+	if err != nil {
+		fmt.Print("grpc gateway server not established")
+		log.Fatal(err)
 	}
 }
 
