@@ -8,12 +8,15 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.51.1
 	github.com/go-playground/validator/v10 v10.17.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
+	github.com/golang/protobuf v1.5.3
 	github.com/gorilla/mux v1.8.1
 	github.com/hibiken/asynq v0.24.1
 	github.com/rs/zerolog v1.32.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.8.4
 	go.mongodb.org/mongo-driver v1.13.1
+	google.golang.org/grpc v1.59.0
+	google.golang.org/protobuf v1.32.0
 )
 
 require (
@@ -39,7 +42,6 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -74,7 +76,7 @@ require (
 	golang.org/x/sys v0.17.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	google.golang.org/protobuf v1.32.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231120223509-83a465c0220f // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

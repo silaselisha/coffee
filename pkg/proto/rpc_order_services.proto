@@ -1,0 +1,9 @@
+syntax = "proto3";
+package pb;
+
+import "rpc_order.proto";
+option go_package = "github.com/silaselisha/coffee-api/pkg/pb";
+
+service OrderService {
+    rpc CreateOrder (OrderRequest) returns (OrderResponse) {}
+}
