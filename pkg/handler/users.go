@@ -658,20 +658,20 @@ func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter
 }
 
 func userRoutes(gmux *mux.Router, srv *Server) {
-	getUsersRouter := gmux.Methods(http.MethodGet).Subrouter()
+	userGetRouter := gmux.Methods(http.MethodGet).Subrouter()
 	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
 	forgotPasswordRouter := gmux.Methods(http.MethodPost).Subrouter()
 	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
 	resetPasswordRouter := gmux.Methods(http.MethodPut).Subrouter()
 	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
 
-	getUsersRouter.Use(middleware.AuthMiddleware(srv.token))
+	userGetRouter.Use(middleware.AuthMiddleware(srv.token))
 
-	getAllUsersRouter := getUsersRouter.PathPrefix("/").Subrouter()
+	getAllUsersRouter := userGetRouter.PathPrefix("/").Subrouter()
 	getAllUsersRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
 	getAllUsersRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
 
-	getUserByIdRouter := getUsersRouter.PathPrefix("/").Subrouter()
+	getUserByIdRouter := userGetRouter.PathPrefix("/").Subrouter()
 	getUserByIdRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin", "user"))
 	getUserByIdRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
 

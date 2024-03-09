@@ -2,8 +2,14 @@ syntax = "proto3";
 package pb;
 
 import "rpc_order.proto";
+import "google/api/annotations.proto";
 option go_package = "github.com/silaselisha/coffee-api/pkg/pb";
 
 service OrderService {
-    rpc CreateOrder (OrderRequest) returns (OrderResponse) {}
+    rpc CreateOrder (OrderRequest) returns (OrderResponse) {
+        option (google.api.http) = {
+            post: "/api/v1/orders",
+            body: "*"
+        };
+    }
 }
