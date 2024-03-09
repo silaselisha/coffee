@@ -52,9 +52,8 @@ const (
 
 type ItemOrder struct {
 	Item        primitive.ObjectID `bson:"item"`
-	Quantity    int32              `bson:"quantity"`
-	Discount    float32            `bson:"discount"`
-	TotalAmount float64            `bson:"total_amount"`
+	Quantity    int64              `bson:"quantity"`
+	Discount    float64            `bson:"discount"`
 }
 
 type Order struct {
