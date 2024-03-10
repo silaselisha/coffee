@@ -54,8 +54,9 @@ func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor worke
 	server.vd = validate
 
 	router := mux.NewRouter()
-	productRoutes(router, server)
-	userRoutes(router, server)
+	apiRouter := router.PathPrefix("/api/v1").Subrouter()
+	productRoutes(apiRouter, server)
+	userRoutes(apiRouter, server)
 
 	server.Router = router
 	return server

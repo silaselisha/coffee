@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -9,11 +11,17 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/hibiken/asynq"
+	"github.com/silaselisha/coffee-api/pkg/gapi"
 	"github.com/silaselisha/coffee-api/pkg/handler"
+	"github.com/silaselisha/coffee-api/pkg/pb"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/util"
 	"github.com/silaselisha/coffee-api/pkg/workers"
+	"go.mongodb.org/mongo-driver/mongo"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -56,11 +64,67 @@ func main() {
 		o.Region = "us-east-1"
 	})
 
+	go startGrpcGatewayServer(envs, mongo_client)
 	go taskProcessor(redisOpts, server.Store, *envs, client)
+	go startGrpcServer(envs, mongo_client)
 
-	err = http.ListenAndServe(envs.SERVER_ADDRESS, server.Router)
+	fmt.Printf("serving HTTP/REST server\n")
+	fmt.Printf("http://localhost:%v/\n", envs.SERVER_REST_ADDRESS)
+
+	err = http.ListenAndServe(envs.SERVER_REST_ADDRESS, server.Router)
 	if err != nil {
 		log.Panic()
+		return
+	}
+}
+
+func startGrpcGatewayServer(envs *util.Config, mongo *mongo.Client) {
+	server := gapi.NewServer(envs, mongo)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	grpcMux := runtime.NewServeMux()
+	err := pb.RegisterOrderServiceHandlerServer(ctx, grpcMux, server)
+	if err != nil {
+		fmt.Print("failed to register order service hanlder server")
+		log.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/", grpcMux)
+	listener, err := net.Listen("tcp", envs.SERVER_GRPC_GATEWAY_ADDRESS)
+	if err != nil {
+		fmt.Print("tcp listener not established")
+		log.Fatal(err)
+	}
+
+	fmt.Printf("serving gRPC Gateway server\n")
+	fmt.Printf("http://localhost:%v/\n", envs.SERVER_GRPC_GATEWAY_ADDRESS)
+	err = http.Serve(listener, mux)
+	if err != nil {
+		fmt.Print("grpc gateway server not established")
+		log.Fatal(err)
+	}
+}
+
+func startGrpcServer(envs *util.Config, mongo *mongo.Client) {
+	server := gapi.NewServer(envs, mongo)
+	grpcServer := grpc.NewServer()
+
+	pb.RegisterOrderServiceServer(grpcServer, server)
+	listener, err := net.Listen("tcp", envs.SERVER_GRPC_ADDRESS)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	reflection.Register(grpcServer)
+
+	fmt.Printf("serving gRPC server\n")
+	fmt.Printf("http://localhost:%v/\n", envs.SERVER_GRPC_ADDRESS)
+	err = grpcServer.Serve(listener)
+	if err != nil {
+		log.Fatal(err)
 		return
 	}
 }
