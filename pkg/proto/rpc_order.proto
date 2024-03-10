@@ -1,0 +1,17 @@
+syntax = "proto3";
+package pb;
+
+import "order.proto";
+option go_package = "github.com/silaselisha/coffee-api/pkg/pb";
+
+message OrderRequest {
+    string user = 1;
+    repeated Order products = 2;
+    double total_amount = 3;
+    double total_discount = 4;
+    int32 status = 5;
+}
+
+message OrderResponse {
+    Bucket bucket = 1;
+}
