@@ -64,9 +64,8 @@ func main() {
 		o.Region = "us-east-1"
 	})
 
-	go startGrpcGatewayServer(envs, mongo_client)
 	go taskProcessor(redisOpts, server.Store, *envs, client)
-	go startGrpcServer(envs, mongo_client)
+
 
 	fmt.Printf("serving HTTP/REST server\n")
 	fmt.Printf("http://localhost:%v/\n", envs.SERVER_REST_ADDRESS)
@@ -74,57 +73,6 @@ func main() {
 	err = http.ListenAndServe(envs.SERVER_REST_ADDRESS, server.Router)
 	if err != nil {
 		log.Panic()
-		return
-	}
-}
-
-func startGrpcGatewayServer(envs *util.Config, mongo *mongo.Client) {
-	server := gapi.NewServer(envs, mongo)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	grpcMux := runtime.NewServeMux()
-	err := pb.RegisterOrderServiceHandlerServer(ctx, grpcMux, server)
-	if err != nil {
-		fmt.Print("failed to register order service hanlder server")
-		log.Fatal(err)
-	}
-
-	mux := http.NewServeMux()
-	mux.Handle("/", grpcMux)
-	listener, err := net.Listen("tcp", envs.SERVER_GRPC_GATEWAY_ADDRESS)
-	if err != nil {
-		fmt.Print("tcp listener not established")
-		log.Fatal(err)
-	}
-
-	fmt.Printf("serving gRPC Gateway server\n")
-	fmt.Printf("http://localhost:%v/\n", envs.SERVER_GRPC_GATEWAY_ADDRESS)
-	err = http.Serve(listener, mux)
-	if err != nil {
-		fmt.Print("grpc gateway server not established")
-		log.Fatal(err)
-	}
-}
-
-func startGrpcServer(envs *util.Config, mongo *mongo.Client) {
-	server := gapi.NewServer(envs, mongo)
-	grpcServer := grpc.NewServer()
-
-	pb.RegisterOrderServiceServer(grpcServer, server)
-	listener, err := net.Listen("tcp", envs.SERVER_GRPC_ADDRESS)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	reflection.Register(grpcServer)
-
-	fmt.Printf("serving gRPC server\n")
-	fmt.Printf("http://localhost:%v/\n", envs.SERVER_GRPC_ADDRESS)
-	err = grpcServer.Serve(listener)
-	if err != nil {
-		log.Fatal(err)
 		return
 	}
 }
