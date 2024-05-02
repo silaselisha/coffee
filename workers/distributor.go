@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/silaselisha/coffee-api/pkg/util"
+	"github.com/silaselisha/coffee-api/util"
 )
 
 type TaskDistributor interface {

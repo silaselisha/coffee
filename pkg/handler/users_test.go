@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/pkg/util"
+	"github.com/silaselisha/coffee-api/util"
 	"github.com/stretchr/testify/require"
 )
 

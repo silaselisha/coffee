@@ -10,8 +10,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
-	"github.com/silaselisha/coffee-api/pkg/util"
-	"github.com/silaselisha/coffee-api/pkg/workers"
+	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/workers"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
