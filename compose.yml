@@ -1,0 +1,11 @@
+name: 'coffeeshop'
+
+services:
+  redis_cache:
+    image: redis:7.0-alpine
+    restart: always
+    ports:
+        - "6379:6379"
+    command: redis-server /usr/local/etc/redis/redis.conf --save 20 1 --loglevel warning
+    volumes:
+        - /usr/local/etc/redis/redis.conf

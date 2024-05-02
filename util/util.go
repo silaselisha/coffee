@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -42,8 +43,11 @@ func HandleFuncDecorator(handle func(ctx context.Context, w http.ResponseWriter,
 	}
 }
 
-func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+func Connect(ctx context.Context, envs *Config) (*mongo.Client, error) {
+	rgx := regexp.MustCompile("<password>")
+	URI := string(rgx.ReplaceAll([]byte(envs.DB_URI), []byte(envs.DB_PASSWORD)))
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(URI))
 	if err != nil {
 		return nil, err
 	}

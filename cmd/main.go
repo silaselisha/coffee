@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"time"
 
@@ -11,17 +10,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/hibiken/asynq"
-	"github.com/silaselisha/coffee-api/pkg/gapi"
 	"github.com/silaselisha/coffee-api/pkg/handler"
-	"github.com/silaselisha/coffee-api/pkg/pb"
 	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/pkg/util"
-	"github.com/silaselisha/coffee-api/pkg/workers"
-	"go.mongodb.org/mongo-driver/mongo"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
+	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/workers"
 )
 
 func main() {
@@ -34,7 +27,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	mongo_client, err := util.Connect(ctx, envs.DB_URI)
+	mongo_client, err := util.Connect(ctx, envs)
 	if err != nil {
 		log.Panic(err)
 		return
@@ -66,13 +59,12 @@ func main() {
 
 	go taskProcessor(redisOpts, server.Store, *envs, client)
 
-
 	fmt.Printf("serving HTTP/REST server\n")
 	fmt.Printf("http://localhost:%v/\n", envs.SERVER_REST_ADDRESS)
 
 	err = http.ListenAndServe(envs.SERVER_REST_ADDRESS, server.Router)
 	if err != nil {
-		log.Panic()
+		log.Panic(err)
 		return
 	}
 }

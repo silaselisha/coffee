@@ -9,8 +9,8 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/pkg/util"
-	"github.com/silaselisha/coffee-api/pkg/workers"
+	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/workers"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 
-	mongoClient, err = util.Connect(context.Background(), envs.DB_URI)
+	mongoClient, err = util.Connect(context.Background(), envs)
 	if err != nil {
 		log.Fatal(err)
 	}
