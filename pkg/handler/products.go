@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/internal"
@@ -175,7 +176,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
-		product := itemResponseParams{
+		product := types.ItemResponseParams{
 			Id:          updatedDocument.Id.Hex(),
 			Images:      updatedDocument.Images,
 			Name:        updatedDocument.Name,
@@ -214,17 +215,20 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		case errors.Is(err, &json.SyntaxError{}):
 			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
+		case err.(validator.ValidationErrors) != nil:
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
+
 		default:
 			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
 	result := struct {
-		Status string             `json:"status"`
-		Data   itemResponseParams `json:"data"`
+		Status string                   `json:"status"`
+		Data   types.ItemResponseParams `json:"data"`
 	}{
 		Status: "success",
-		Data:   response.(itemResponseParams),
+		Data:   response.(types.ItemResponseParams),
 	}
 	return internal.ResponseHandler(w, result, http.StatusOK)
 }
@@ -232,11 +236,11 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.Store.Collection(ctx, "coffeeshop", "products")
 
-	var result itemResponseListParams
+	var result types.ItemResponseListParams
 	type resp struct {
-		Status  string                 `json:"status"`
-		Results int32                  `json:"results"`
-		Data    itemResponseListParams `json:"data"`
+		Status  string                       `json:"status"`
+		Results int32                        `json:"results"`
+		Data    types.ItemResponseListParams `json:"data"`
 	}
 
 	productRes := resp{Status: "success", Results: 0, Data: result}
@@ -260,7 +264,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 
-		product := itemResponseParams{
+		product := types.ItemResponseParams{
 			Id:          item.Id.Hex(),
 			Images:      item.Images,
 			Name:        item.Name,
@@ -300,11 +304,10 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		if err == mongo.ErrNoDocuments {
 			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
-
 		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	product := itemResponseParams{
+	product := types.ItemResponseParams{
 		Id:          item.Id.Hex(),
 		Images:      item.Images,
 		Name:        item.Name,
@@ -321,8 +324,8 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	res := struct {
-		Status string             `json:"status"`
-		Data   itemResponseParams `json:"data"`
+		Status string                   `json:"status"`
+		Data   types.ItemResponseParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   product,
@@ -556,13 +559,16 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		item.Id = primitive.NewObjectID()
 		item.CreatedAt = time.Now()
 		item.UpdatedAt = time.Now()
+		if err := s.vd.Struct(&item); err != nil {
+			return nil, err
+		}
 
 		_, err = collection.InsertOne(ctx, item)
 		if err != nil {
 			return nil, err
 		}
 
-		product := itemResponseParams{
+		product := types.ItemResponseParams{
 			Id:          item.Id.Hex(),
 			Images:      item.Images,
 			Name:        item.Name,
@@ -596,15 +602,18 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		case errors.Is(err, &json.SyntaxError{}):
 			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
+		case err.(validator.ValidationErrors) != nil:
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
+
 		default:
 			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
-	product := resposne.(itemResponseParams)
+	product := resposne.(types.ItemResponseParams)
 	result := struct {
-		Status string             `json:"status"`
-		Data   itemResponseParams `json:"data"`
+		Status string                   `json:"status"`
+		Data   types.ItemResponseParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   product,

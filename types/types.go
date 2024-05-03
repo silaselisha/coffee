@@ -1,6 +1,10 @@
 package types
 
-import "time"
+import (
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
 type Config struct {
 	DB_URI               string `mapstructure:"DB_URI"`
@@ -45,3 +49,21 @@ type UserResponseParams struct {
 }
 
 type UserResponseListParams []UserResponseParams
+
+type ItemResponseParams struct {
+	Id          string             `json:"_id"`
+	Images      []string           `json:"images"`
+	Name        string             `json:"name"`
+	Author      primitive.ObjectID `json:"author"`
+	Price       float64            `json:"price"`
+	Summary     string             `json:"summary"`
+	Category    string             `json:"category"`
+	Thumbnail   string             `json:"thumbnail"`
+	Description string             `json:"description"`
+	Ingridients []string           `json:"ingridients"`
+	Ratings     float64            `json:"ratings"`
+	CreatedAt   time.Time          `json:"created_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+}
+
+type ItemResponseListParams []ItemResponseParams

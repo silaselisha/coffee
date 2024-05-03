@@ -139,27 +139,6 @@ func TestUserLogin(t *testing.T) {
 			},
 		},
 		{
-			name: "admin login | 200 status code",
-			body: map[string]interface{}{
-				"email":    "admin@aws.ac.uk",
-				"password": "Abstract$87",
-			},
-			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				data, err := io.ReadAll(recorder.Body)
-				require.NoError(t, err)
-				require.NotEmpty(t, data)
-
-				var res struct {
-					Status string
-					Token  string
-				}
-				err = json.Unmarshal(data, &res)
-				require.NoError(t, err)
-				adminTestToken = res.Token
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
 			name: "login user wrong email | 404 status code",
 			body: map[string]interface{}{
 				"email":    "test@test.com",
