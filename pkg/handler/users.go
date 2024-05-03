@@ -278,8 +278,8 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	payload := ctx.Value(middleware.AuthPayloadKey{}).(*token.Payload)
-	userInfo := ctx.Value(middleware.AuthRoleKey{}).(*middleware.UserInfo)
+	payload := ctx.Value(types.AuthPayloadKey{}).(*token.Payload)
+	userInfo := ctx.Value(types.AuthRoleKey{}).(*types.UserInfo)
 
 	if payload.Id != id.Hex() && userInfo.Role != "admin" {
 		err := errors.New("user only allowed to retrive their person account")
@@ -328,7 +328,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
+	payload := r.Context().Value(types.AuthPayloadKey{}).(*token.Payload)
 	var user store.User
 	err = collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
 	if err != nil {
@@ -462,7 +462,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
+	payload := r.Context().Value(types.AuthPayloadKey{}).(*token.Payload)
 	var user store.User
 	err = collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
 	if err != nil {

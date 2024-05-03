@@ -67,3 +67,10 @@ type ItemResponseParams struct {
 }
 
 type ItemResponseListParams []ItemResponseParams
+
+type AuthPayloadKey struct{}
+type AuthRoleKey struct{}
+type UserInfo struct {
+	Role string
+	Id   primitive.ObjectID
+}
