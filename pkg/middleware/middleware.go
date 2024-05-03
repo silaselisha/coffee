@@ -9,16 +9,10 @@ import (
 
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
+	"github.com/silaselisha/coffee-api/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-type AuthPayloadKey struct{}
-type AuthRoleKey struct{}
-type UserInfo struct {
-	Role string
-	Id   primitive.ObjectID
-}
 
 func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -46,7 +40,7 @@ func AuthMiddleware(tkn token.Token) func(next http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), AuthPayloadKey{}, payload)
+			ctx := context.WithValue(r.Context(), types.AuthPayloadKey{}, payload)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})
@@ -77,7 +71,7 @@ func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handle
 				return
 			}
 
-			payload := r.Context().Value(AuthPayloadKey{}).(*token.Payload)
+			payload := r.Context().Value(types.AuthPayloadKey{}).(*token.Payload)
 			var user store.User
 			collection := str.Collection(r.Context(), "coffeeshop", "users")
 			id, err := primitive.ObjectIDFromHex(payload.Id)
@@ -103,12 +97,12 @@ func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handle
 				return
 			}
 
-			var userInfo *UserInfo = &UserInfo{
+			var userInfo *types.UserInfo = &types.UserInfo{
 				Role: role,
 				Id: id,
 			}
 			
-			ctx := context.WithValue(r.Context(), AuthRoleKey{}, userInfo)
+			ctx := context.WithValue(r.Context(), types.AuthRoleKey{}, userInfo)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})

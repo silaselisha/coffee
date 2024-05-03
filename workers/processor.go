@@ -8,8 +8,11 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog/log"
+	"github.com/silaselisha/coffee-api/internal"
+	"github.com/silaselisha/coffee-api/internal/aws"
+	"github.com/silaselisha/coffee-api/internal/mail"
 	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -30,11 +33,11 @@ type TaskProcessor interface {
 type RedisTaskServerProcessor struct {
 	server *asynq.Server
 	store  store.Mongo
-	envs   util.Config
-	client *util.CoffeeShopBucket
+	envs   types.Config
+	client *aws.CoffeeShopBucket
 }
 
-func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs util.Config, client *util.CoffeeShopBucket) TaskProcessor {
+func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Config, client *aws.CoffeeShopBucket) TaskProcessor {
 
 	server := asynq.NewServer(opts, asynq.Config{
 		Queues: map[string]int{CriticalQueue: 1, DefaultQueue: 2},
@@ -60,8 +63,8 @@ func (processor *RedisTaskServerProcessor) ProcessTaskSendVerificationMail(ctx c
 	fmt.Printf("BEGIN @%+v\n", time.Now())
 	fmt.Printf("start processing task %+s\n", task.Type())
 
-	transporter := util.NewSMTPTransporter(&processor.envs)
-	message := fmt.Sprintf("http://localhost:3000/verify?token=%s&timestamp=%d", user.Id.Hex(), util.ResetToken(2880))
+	transporter := mail.NewSMTPTransporter(&processor.envs)
+	message := fmt.Sprintf("http://localhost:3000/verify?token=%s&timestamp=%d", user.Id.Hex(), internal.ResetToken(2880))
 
 	err = transporter.MailSender(ctx, user.Email, []byte(message))
 	if err != nil {
@@ -79,8 +82,8 @@ func (processor *RedisTaskServerProcessor) ProcessTaskSendResetPasswordMail(ctx 
 		return fmt.Errorf("error occured while retreiving user %w", err)
 	}
 
-	transporter := util.NewSMTPTransporter(&processor.envs)
-	message := fmt.Sprintf("http://localhost:3000/resetpassword?token=%s&timestamp=%d", user.Id.Hex(), util.ResetToken(2880))
+	transporter := mail.NewSMTPTransporter(&processor.envs)
+	message := fmt.Sprintf("http://localhost:3000/resetpassword?token=%s&timestamp=%d", user.Id.Hex(), internal.ResetToken(2880))
 
 	err = transporter.MailSender(ctx, user.Email, []byte(message))
 	if err != nil {
@@ -92,7 +95,7 @@ func (processor *RedisTaskServerProcessor) ProcessTaskSendResetPasswordMail(ctx 
 }
 
 func getUserByEmail(ctx context.Context, processor *RedisTaskServerProcessor, task *asynq.Task) (store.User, error) {
-	var Payload util.PayloadSendMail
+	var Payload types.PayloadSendMail
 	err := json.Unmarshal(task.Payload(), &Payload)
 	if err != nil {
 		fmt.Print(time.Now())
@@ -115,7 +118,7 @@ func getUserByEmail(ctx context.Context, processor *RedisTaskServerProcessor, ta
 }
 
 func (processor *RedisTaskServerProcessor) ProcessTaskUploadS3Object(ctx context.Context, task *asynq.Task) error {
-	var Payload util.PayloadUploadImage
+	var Payload types.PayloadUploadImage
 	err := json.Unmarshal(task.Payload(), &Payload)
 	if err != nil {
 		fmt.Print(time.Now())
@@ -136,7 +139,7 @@ func (processor *RedisTaskServerProcessor) ProcessTaskUploadS3Object(ctx context
 }
 
 func (processor *RedisTaskServerProcessor) ProcessTaskMultipleUploadS3Object(ctx context.Context, task *asynq.Task) error {
-	var Payload []*util.PayloadUploadImage
+	var Payload []*types.PayloadUploadImage
 	err := json.Unmarshal(task.Payload(), &Payload)
 	if err != nil {
 		fmt.Print(time.Now())

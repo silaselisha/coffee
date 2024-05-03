@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/types"
 )
 
 type TaskDistributor interface {
-	SendVerificationMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error
-	SendPasswordResetMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error
-	SendS3ObjectUploadTask(ctx context.Context, payload *util.PayloadUploadImage, opts ...asynq.Option) error
-	SendMultipleS3ObjectUploadTask(ctx context.Context, payload []*util.PayloadUploadImage, opts ...asynq.Option) error
+	SendVerificationMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error
+	SendPasswordResetMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error
+	SendS3ObjectUploadTask(ctx context.Context, payload *types.PayloadUploadImage, opts ...asynq.Option) error
+	SendMultipleS3ObjectUploadTask(ctx context.Context, payload []*types.PayloadUploadImage, opts ...asynq.Option) error
 	SendS3ObjectDeleteTask(ctx context.Context, images []string, opts ...asynq.Option) error
 }
 
@@ -37,7 +37,7 @@ func NewTaskClientDistributor(opts asynq.RedisClientOpt) TaskDistributor {
 	}
 }
 
-func (distributor *RedisTaskClientDistributor) SendVerificationMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error {
+func (distributor *RedisTaskClientDistributor) SendVerificationMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error {
 	payloadBuffer, err := json.Marshal(payload)
 	if err != nil {
 		fmt.Print(time.Now())
@@ -55,7 +55,7 @@ func (distributor *RedisTaskClientDistributor) SendVerificationMailTask(ctx cont
 	return nil
 }
 
-func (distributor *RedisTaskClientDistributor) SendPasswordResetMailTask(ctx context.Context, payload *util.PayloadSendMail, opts ...asynq.Option) error {
+func (distributor *RedisTaskClientDistributor) SendPasswordResetMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error {
 	payloadBuffer, err := json.Marshal(payload)
 	if err != nil {
 		fmt.Print(time.Now())
@@ -73,7 +73,7 @@ func (distributor *RedisTaskClientDistributor) SendPasswordResetMailTask(ctx con
 	return nil
 }
 
-func (distributor *RedisTaskClientDistributor) SendS3ObjectUploadTask(ctx context.Context, payload *util.PayloadUploadImage, opts ...asynq.Option) error {
+func (distributor *RedisTaskClientDistributor) SendS3ObjectUploadTask(ctx context.Context, payload *types.PayloadUploadImage, opts ...asynq.Option) error {
 	payloadBuffer, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal error %w", err)
@@ -91,7 +91,7 @@ func (distributor *RedisTaskClientDistributor) SendS3ObjectUploadTask(ctx contex
 	return nil
 }
 
-func (distributor *RedisTaskClientDistributor) SendMultipleS3ObjectUploadTask(ctx context.Context, payload []*util.PayloadUploadImage, opts ...asynq.Option) error {
+func (distributor *RedisTaskClientDistributor) SendMultipleS3ObjectUploadTask(ctx context.Context, payload []*types.PayloadUploadImage, opts ...asynq.Option) error {
 	payloadBuffer, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal error %w", err)
