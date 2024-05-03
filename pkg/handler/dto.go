@@ -11,18 +11,6 @@ type userLoginParams struct {
 	Password string `bson:"password" validate:"required"`
 }
 
-type userResponseParams struct {
-	Id          string    `json:"_id"`
-	Avatar      string    `json:"avatar"`
-	UserName    string    `json:"username"`
-	Role        string    `json:"role"`
-	Email       string    `json:"email"`
-	PhoneNumber string    `json:"phone"`
-	Verified    bool      `json:"Verified"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
 type itemResponseParams struct {
 	Id          string             `json:"_id"`
 	Images      []string           `json:"images"`
@@ -38,8 +26,6 @@ type itemResponseParams struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	UpdatedAt   time.Time          `json:"updated_at"`
 }
-
-type userResponseListParams []userResponseParams
 
 type itemResponseListParams []itemResponseParams
 type passwordResetParams struct {

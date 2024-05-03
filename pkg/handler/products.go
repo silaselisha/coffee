@@ -14,9 +14,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/hibiken/asynq"
+	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/util"
+	"github.com/silaselisha/coffee-api/types"
 	"github.com/silaselisha/coffee-api/workers"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -139,13 +140,13 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 				}
 
 				imageFile := io.NopCloser(bytes.NewReader(data))
-				image, fileName, extension, err := util.ImageProcessor(ctx, imageFile, &util.FileMetadata{ContetntType: "image"})
+				image, fileName, extension, err := internal.ImageProcessor(ctx, imageFile, &types.FileMetadata{ContetntType: "image"})
 				if err != nil {
 					return nil, err
 				}
 
 				objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
-				err = s.distributor.SendS3ObjectUploadTask(ctx, &util.PayloadUploadImage{
+				err = s.distributor.SendS3ObjectUploadTask(ctx, &types.PayloadUploadImage{
 					Image:     image,
 					Extension: extension,
 					ObjectKey: objectKey,
@@ -202,19 +203,19 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		case errors.As(err, &mongo.WriteException{}):
 			exception, _ := err.(mongo.WriteException)
 			if exception.WriteErrors[0].Code == 11000 {
-				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
+				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, mongo.ErrNoDocuments):
 			if err == mongo.ErrNoDocuments {
-				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 			}
 
 		case errors.Is(err, &json.SyntaxError{}):
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		default:
-			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
@@ -225,7 +226,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		Status: "success",
 		Data:   response.(itemResponseParams),
 	}
-	return util.ResponseHandler(w, result, http.StatusOK)
+	return internal.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -242,10 +243,10 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, productRes, http.StatusOK)
+			return internal.ResponseHandler(w, productRes, http.StatusOK)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 	defer cur.Close(ctx)
 
@@ -256,7 +257,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 			if err == io.EOF {
 				break
 			}
-			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 
 		product := itemResponseParams{
@@ -278,7 +279,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	productRes = resp{Status: "success", Results: int32(len(result)), Data: result}
-	return util.ResponseHandler(w, productRes, http.StatusOK)
+	return internal.ResponseHandler(w, productRes, http.StatusOK)
 }
 
 func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -287,7 +288,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
@@ -297,10 +298,10 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	err = result.Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	product := itemResponseParams{
@@ -326,7 +327,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		Status: "success",
 		Data:   product,
 	}
-	return util.ResponseHandler(w, res, http.StatusOK)
+	return internal.ResponseHandler(w, res, http.StatusOK)
 }
 
 func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -398,18 +399,18 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 		case errors.As(err, &mongo.WriteException{}):
 			exception, _ := err.(mongo.WriteException)
 			if exception.WriteErrors[0].Code == 11000 {
-				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
+				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, mongo.ErrNoDocuments):
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 
 		default:
-			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
-	return util.ResponseHandler(w, "", http.StatusNoContent)
+	return internal.ResponseHandler(w, "", http.StatusNoContent)
 }
 
 func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -437,7 +438,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		}
 
 		var item store.Item
-		var images []*util.PayloadUploadImage
+		var images []*types.PayloadUploadImage
 		reader, err := r.MultipartReader()
 		if err != nil {
 			return nil, err
@@ -504,7 +505,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 				item.Category = string(data)
 
 			case "thumbnail":
-				data, fileName, extension, err := util.ImageProcessor(ctx, curr, &util.FileMetadata{ContetntType: "image"})
+				data, fileName, extension, err := internal.ImageProcessor(ctx, curr, &types.FileMetadata{ContetntType: "image"})
 				if err != nil {
 					return nil, err
 				}
@@ -517,7 +518,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 					asynq.Queue(workers.CriticalQueue),
 				}
 
-				err = s.distributor.SendS3ObjectUploadTask(ctx, &util.PayloadUploadImage{
+				err = s.distributor.SendS3ObjectUploadTask(ctx, &types.PayloadUploadImage{
 					ObjectKey: objectKey,
 					Extension: extension,
 					Image:     data,
@@ -528,12 +529,12 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 				}
 
 			case "images":
-				data, fileName, extension, err := util.ImageProcessor(ctx, curr, &util.FileMetadata{ContetntType: "image"})
+				data, fileName, extension, err := internal.ImageProcessor(ctx, curr, &types.FileMetadata{ContetntType: "image"})
 				if err != nil {
 					return nil, err
 				}
 				objectKey := fmt.Sprintf("images/products/beverages/%s", fileName)
-				images = append(images, &util.PayloadUploadImage{
+				images = append(images, &types.PayloadUploadImage{
 					Image:     data,
 					Extension: extension,
 					ObjectKey: objectKey,
@@ -589,14 +590,14 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		case errors.As(err, &mongo.WriteException{}):
 			exceptionError, _ := err.(mongo.WriteException)
 			if exceptionError.WriteErrors[0].Code == 11000 {
-				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
+				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, &json.SyntaxError{}):
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		default:
-			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
@@ -609,7 +610,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		Data:   product,
 	}
 
-	return util.ResponseHandler(w, result, http.StatusCreated)
+	return internal.ResponseHandler(w, result, http.StatusCreated)
 }
 
 func productRoutes(gmux *mux.Router, srv *Server) {
@@ -621,18 +622,18 @@ func productRoutes(gmux *mux.Router, srv *Server) {
 	postItemsRouter.Use(middleware.AuthMiddleware(srv.token))
 	postProductsRouter := postItemsRouter.PathPrefix("/").Subrouter()
 	postProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	postProductsRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.CreateProductHandler))
+	postProductsRouter.HandleFunc("/products", internal.HandleFuncDecorator(srv.CreateProductHandler))
 
-	getItemsRouter.HandleFunc("/products", util.HandleFuncDecorator(srv.GetAllProductsHandler))
-	getItemsRouter.HandleFunc("/products/{category}/{id}", util.HandleFuncDecorator(srv.GetProductByIdHandler))
+	getItemsRouter.HandleFunc("/products", internal.HandleFuncDecorator(srv.GetAllProductsHandler))
+	getItemsRouter.HandleFunc("/products/{category}/{id}", internal.HandleFuncDecorator(srv.GetProductByIdHandler))
 
 	deleteItemsRouter.Use(middleware.AuthMiddleware(srv.token))
 	deleteProductsRouter := deleteItemsRouter.PathPrefix("/products").Subrouter()
 	deleteProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	deleteProductsRouter.HandleFunc("/{id}", util.HandleFuncDecorator(srv.DeleteProductByIdHandler))
+	deleteProductsRouter.HandleFunc("/{id}", internal.HandleFuncDecorator(srv.DeleteProductByIdHandler))
 
 	updateItemsRouter.Use(middleware.AuthMiddleware(srv.token))
 	updateProductsRouter := updateItemsRouter.PathPrefix("/products").Subrouter()
 	updateProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	updateProductsRouter.HandleFunc("/{id}", util.HandleFuncDecorator(srv.UpdateProductHandler))
+	updateProductsRouter.HandleFunc("/{id}", internal.HandleFuncDecorator(srv.UpdateProductHandler))
 }
