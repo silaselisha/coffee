@@ -15,13 +15,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"github.com/hibiken/asynq"
+	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
-	"github.com/silaselisha/coffee-api/pkg/util"
-	"github.com/silaselisha/coffee-api/pkg/workers"
+	"github.com/silaselisha/coffee-api/types"
+	"github.com/silaselisha/coffee-api/workers"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -32,7 +34,7 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	credentialsBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		response := newErrorResponse("failed", err.Error())
-		return util.ResponseHandler(w, response, http.StatusBadRequest)
+		return internal.ResponseHandler(w, response, http.StatusBadRequest)
 	}
 
 	var credentials userLoginParams
@@ -40,7 +42,7 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	err = s.vd.Struct(credentials)
 	if err != nil {
 		response := newErrorResponse("failed", err.Error())
-		return util.ResponseHandler(w, response, http.StatusBadRequest)
+		return internal.ResponseHandler(w, response, http.StatusBadRequest)
 	}
 
 	var user store.User
@@ -49,35 +51,35 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 	if err := curr.Decode(&user); err != nil {
 		if err == mongo.ErrNoDocuments {
 			response := newErrorResponse("failed", err.Error())
-			return util.ResponseHandler(w, response, http.StatusNotFound)
+			return internal.ResponseHandler(w, response, http.StatusNotFound)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	if !util.ComparePasswordEncryption(credentials.Password, user.Password) {
+	if !internal.ComparePasswordEncryption(credentials.Password, user.Password) {
 		err := errors.New("invalid user password or email address")
 		response := newErrorResponse("failed", err.Error())
-		return util.ResponseHandler(w, response, http.StatusBadRequest)
+		return internal.ResponseHandler(w, response, http.StatusBadRequest)
 	}
 
 	jwtToken := token.NewToken(s.envs.SECRET_ACCESS_KEY)
 	days, err := strconv.Atoi(s.envs.JWT_EXPIRES_AT)
 	if err != nil {
-		return util.ResponseHandler(w, err, http.StatusInternalServerError)
+		return internal.ResponseHandler(w, err, http.StatusInternalServerError)
 	}
 
 	hrs := fmt.Sprintf("%dh", (days * 24))
 	duration, err := time.ParseDuration(hrs)
 	if err != nil {
 		response := newErrorResponse("failed", err.Error())
-		return util.ResponseHandler(w, response, http.StatusInternalServerError)
+		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
 	}
 
 	token, err := jwtToken.CreateToken(ctx, duration, user.Id.Hex(), user.Email)
 	if err != nil {
 		response := newErrorResponse("failed", err.Error())
-		return util.ResponseHandler(w, response, http.StatusInternalServerError)
+		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
 	}
 	res := struct {
 		Status string `json:"status"`
@@ -86,7 +88,7 @@ func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r 
 		Status: "success",
 		Token:  token,
 	}
-	return util.ResponseHandler(w, res, http.StatusOK)
+	return internal.ResponseHandler(w, res, http.StatusOK)
 }
 
 func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -132,7 +134,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 			return nil, err
 		}
 
-		hashedPassword := util.PasswordEncryption([]byte(user.Password))
+		hashedPassword := internal.PasswordEncryption([]byte(user.Password))
 		user.Id = primitive.NewObjectID()
 		user.Role = "user"
 		user.Avatar = "default.jpeg"
@@ -149,12 +151,12 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 			asynq.ProcessIn(3 * time.Second),
 			asynq.Queue(workers.CriticalQueue),
 		}
-		err = s.distributor.SendVerificationMailTask(ctx, &util.PayloadSendMail{Email: user.Email}, opts...)
+		err = s.distributor.SendVerificationMailTask(ctx, &types.PayloadSendMail{Email: user.Email}, opts...)
 		if err != nil {
 			return nil, err
 		}
 
-		resposne := &userResponseParams{
+		resposne := &types.UserResponseParams{
 			Id:          user.Id.Hex(),
 			Avatar:      user.Avatar,
 			UserName:    user.UserName,
@@ -177,56 +179,57 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	if err != nil {
 		switch {
 		case errors.Is(err, mongo.ErrNoDocuments):
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		case errors.As(err, &mongo.WriteException{}):
 			wrtExcp, _ := err.(mongo.WriteException)
 			if wrtExcp.WriteErrors[0].Code == 11000 {
-				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
+				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 		case errors.Is(err, &json.SyntaxError{}):
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
-
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
+		case err.(validator.ValidationErrors) != nil:
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
 		default:
-			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
 	jwtoken := token.NewToken(s.envs.SECRET_ACCESS_KEY)
 	days, err := strconv.Atoi(s.envs.JWT_EXPIRES_AT)
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	hrs := fmt.Sprintf("%dh", (days * 24))
 	duration, err := time.ParseDuration(hrs)
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
-	user := response.(*userResponseParams)
+	user := response.(*types.UserResponseParams)
 	token, err := jwtoken.CreateToken(ctx, duration, user.Id, user.Email)
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	result := struct {
 		Status string              `json:"status"`
 		Token  string              `json:"token"`
-		Data   *userResponseParams `json:"data"`
+		Data   *types.UserResponseParams `json:"data"`
 	}{
 		Status: "success",
 		Token:  token,
 		Data:   user,
 	}
-	return util.ResponseHandler(w, result, http.StatusCreated)
+	return internal.ResponseHandler(w, result, http.StatusCreated)
 }
 
 func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
-	var users userResponseListParams
+	var users types.UserResponseListParams
 	curr, err := collection.Find(ctx, bson.D{{}})
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	defer curr.Close(ctx)
@@ -238,10 +241,10 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 				break
 			}
 
-			return util.ResponseHandler(w, err, http.StatusInternalServerError)
+			return internal.ResponseHandler(w, err, http.StatusInternalServerError)
 		}
 
-		users = append(users, userResponseParams{
+		users = append(users, types.UserResponseParams{
 			Id:          user.Id.Hex(),
 			Avatar:      user.Avatar,
 			UserName:    user.UserName,
@@ -257,13 +260,13 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 	result := struct {
 		Status string                 `json:"status"`
 		Result int32                  `json:"result"`
-		Data   userResponseListParams `json:"data"`
+		Data   types.UserResponseListParams `json:"data"`
 	}{
 		Status: "success",
 		Result: int32(len(users)),
 		Data:   users,
 	}
-	return util.ResponseHandler(w, result, http.StatusOK)
+	return internal.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -272,15 +275,15 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	payload := ctx.Value(middleware.AuthPayloadKey{}).(*token.Payload)
-	userInfo := ctx.Value(middleware.AuthRoleKey{}).(*middleware.UserInfo)
+	payload := ctx.Value(types.AuthPayloadKey{}).(*token.Payload)
+	userInfo := ctx.Value(types.AuthRoleKey{}).(*types.UserInfo)
 
 	if payload.Id != id.Hex() && userInfo.Role != "admin" {
 		err := errors.New("user only allowed to retrive their person account")
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusForbidden)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusForbidden)
 	}
 
 	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
@@ -288,13 +291,13 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	err = curr.Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	resposne := userResponseParams{
+	resposne := types.UserResponseParams{
 		Id:          user.Id.Hex(),
 		Avatar:      user.Avatar,
 		UserName:    user.UserName,
@@ -308,12 +311,12 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 
 	result := struct {
 		Status string             `json:"status"`
-		Data   userResponseParams `json:"data"`
+		Data   types.UserResponseParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   resposne,
 	}
-	return util.ResponseHandler(w, result, http.StatusOK)
+	return internal.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -322,28 +325,28 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
+	payload := r.Context().Value(types.AuthPayloadKey{}).(*token.Payload)
 	var user store.User
 	err = collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusForbidden)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	if payload.Id != user.Id.Hex() {
 		err := errors.New("user only allowed to retrive their person account")
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusForbidden)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusForbidden)
 	}
 
 	err = r.ParseMultipartForm(int64(32 << 20))
 	if err != nil {
-		return util.ResponseHandler(w, err.Error(), http.StatusBadRequest)
+		return internal.ResponseHandler(w, err.Error(), http.StatusBadRequest)
 	}
 
 	fields := []string{"username", "phoneNumber"}
@@ -360,7 +363,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	if file, _, err := r.FormFile("avatar"); err == nil {
 		go func() {
 			defer file.Close()
-			data, filename, extension, err := util.ImageProcessor(ctx, file, &util.FileMetadata{ContetntType: "image"})
+			data, filename, extension, err := internal.ImageProcessor(ctx, file, &types.FileMetadata{ContetntType: "image"})
 			if err != nil {
 				errs <- err
 				return
@@ -373,7 +376,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 				return
 			}
 
-			err = s.distributor.SendS3ObjectUploadTask(ctx, &util.PayloadUploadImage{
+			err = s.distributor.SendS3ObjectUploadTask(ctx, &types.PayloadUploadImage{
 				Image:     data,
 				ObjectKey: objectKey,
 				Extension: extension,
@@ -400,12 +403,12 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		select {
 		case filename, ok := <-fileName:
 			if !ok {
-				return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("image file name error").Error()), http.StatusInternalServerError)
+				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("image file name error").Error()), http.StatusInternalServerError)
 			}
 			data["avatar"] = filename
 		case err := <-errs:
 			if err != nil {
-				return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+				return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 			}
 		}
 	}
@@ -422,13 +425,13 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	updatedUser := userResponseParams{
+	updatedUser := types.UserResponseParams{
 		Id:          updatedDocument.Id.Hex(),
 		Avatar:      updatedDocument.Avatar,
 		UserName:    updatedDocument.UserName,
@@ -442,12 +445,12 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 
 	result := struct {
 		Status string             `json:"status"`
-		Data   userResponseParams `json:"data"`
+		Data   types.UserResponseParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   updatedUser,
 	}
-	return util.ResponseHandler(w, result, http.StatusOK)
+	return internal.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -456,32 +459,32 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(middleware.AuthPayloadKey{}).(*token.Payload)
+	payload := r.Context().Value(types.AuthPayloadKey{}).(*token.Payload)
 	var user store.User
 	err = collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusForbidden)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	if payload.Id != id.Hex() {
 		err := errors.New("user only allowed to retrive their person account")
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusForbidden)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusForbidden)
 	}
 
 	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	errs := make(chan error)
@@ -497,10 +500,10 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 
 	err = <-errs
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	return util.ResponseHandler(w, "", http.StatusNoContent)
+	return internal.ResponseHandler(w, "", http.StatusNoContent)
 }
 
 func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -509,11 +512,11 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 	var forgotPassword forgotPasswordParams
 	forgotPasswordBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 	err = json.Unmarshal(forgotPasswordBytes, &forgotPassword)
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	var user store.User
@@ -521,10 +524,10 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 	err = curr.Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	opts := []asynq.Option{
@@ -532,9 +535,9 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 		asynq.MaxRetry(10),
 		asynq.Queue("critical"),
 	}
-	err = s.distributor.SendPasswordResetMailTask(ctx, &util.PayloadSendMail{Email: user.Email}, opts...)
+	err = s.distributor.SendPasswordResetMailTask(ctx, &types.PayloadSendMail{Email: user.Email}, opts...)
 	if err != nil {
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	result := struct {
@@ -545,7 +548,7 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 		Data:   "URL to reset your password sent to your email",
 	}
 
-	return util.ResponseHandler(w, result, http.StatusOK)
+	return internal.ResponseHandler(w, result, http.StatusOK)
 }
 
 func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -558,36 +561,36 @@ func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter
 	timestamp, err := strconv.Atoi(timestampStr)
 	if err != nil {
 		err = fmt.Errorf("invalid URL reset timestamp %w", err)
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	isURLValid := time.Now().After(time.UnixMilli(int64(timestamp)))
 	if isURLValid {
 
 		err = fmt.Errorf("expired URL reset token, kindly request for a new password reset token")
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	id, err := primitive.ObjectIDFromHex(token)
 	if err != nil {
 		err = fmt.Errorf("invalid URL reset token %w", err)
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	var passwordRest passwordResetParams
 	passwordRestBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		err = fmt.Errorf("invalid data for password rset %w", err)
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	err = json.Unmarshal(passwordRestBytes, &passwordRest)
 	if err != nil {
 		err = fmt.Errorf("invalid data for password reset %w", err)
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	password := util.PasswordEncryption([]byte(passwordRest.Password))
+	password := internal.PasswordEncryption([]byte(passwordRest.Password))
 	updatedAt := time.Now()
 	passwordChangedAt := time.Now()
 
@@ -598,10 +601,10 @@ func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter
 	err = curr.Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return util.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
 
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	result := struct {
@@ -609,7 +612,7 @@ func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter
 	}{
 		Status: "success",
 	}
-	return util.ResponseHandler(w, result, http.StatusPermanentRedirect)
+	return internal.ResponseHandler(w, result, http.StatusPermanentRedirect)
 }
 
 func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -620,18 +623,18 @@ func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter
 	id, err := primitive.ObjectIDFromHex(token)
 	if err != nil {
 		err = fmt.Errorf("invalid account id %w", err)
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	mill, err := strconv.Atoi(timestamp)
 	if err != nil {
 		err = fmt.Errorf("invalid timestamp %w", err)
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	if time.Now().After(time.UnixMilli(int64(mill))) {
 		err = fmt.Errorf("invalid timestamp expired %w", err)
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	var user store.User
@@ -642,9 +645,9 @@ func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			err = fmt.Errorf("document not found %w", err)
-			return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusNotFound)
 		}
-		return util.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	result := struct {
@@ -654,7 +657,7 @@ func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter
 		Status: "success",
 		Data:   "account verified",
 	}
-	return util.ResponseHandler(w, result, http.StatusOK)
+	return internal.ResponseHandler(w, result, http.StatusOK)
 }
 
 func userRoutes(gmux *mux.Router, srv *Server) {
@@ -669,20 +672,20 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 
 	getAllUsersRouter := userGetRouter.PathPrefix("/").Subrouter()
 	getAllUsersRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	getAllUsersRouter.HandleFunc("/users", util.HandleFuncDecorator(srv.GetAllUsersHandlers))
+	getAllUsersRouter.HandleFunc("/users", internal.HandleFuncDecorator(srv.GetAllUsersHandlers))
 
 	getUserByIdRouter := userGetRouter.PathPrefix("/").Subrouter()
 	getUserByIdRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin", "user"))
-	getUserByIdRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.GetUserByIdHandler))
+	getUserByIdRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.GetUserByIdHandler))
 
-	postUserRouter.HandleFunc("/signup", util.HandleFuncDecorator(srv.CreateUserHandler))
-	postUserRouter.HandleFunc("/login", util.HandleFuncDecorator(srv.LoginUserHandler))
+	postUserRouter.HandleFunc("/signup", internal.HandleFuncDecorator(srv.CreateUserHandler))
+	postUserRouter.HandleFunc("/login", internal.HandleFuncDecorator(srv.LoginUserHandler))
 
 	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
-	updateUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.UpdateUserByIdHandler))
+	updateUserRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 
 	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
-	deleteUserRouter.HandleFunc("/users/{id}", util.HandleFuncDecorator(srv.DeleteUserByIdHandler))
-	forgotPasswordRouter.HandleFunc("/forgotpassword", util.HandleFuncDecorator(srv.ForgotPasswordHandler))
-	resetPasswordRouter.HandleFunc("/resetpassword", util.HandleFuncDecorator(srv.ResetPasswordHandler))
+	deleteUserRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.DeleteUserByIdHandler))
+	forgotPasswordRouter.HandleFunc("/forgotpassword", internal.HandleFuncDecorator(srv.ForgotPasswordHandler))
+	resetPasswordRouter.HandleFunc("/resetpassword", internal.HandleFuncDecorator(srv.ResetPasswordHandler))
 }

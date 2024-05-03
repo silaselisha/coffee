@@ -10,17 +10,19 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
-	"github.com/silaselisha/coffee-api/pkg/util"
-	"github.com/silaselisha/coffee-api/pkg/workers"
+	"github.com/silaselisha/coffee-api/internal"
+	"github.com/silaselisha/coffee-api/internal/aws"
+	"github.com/silaselisha/coffee-api/types"
+	"github.com/silaselisha/coffee-api/workers"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Server struct {
 	Router      *mux.Router
 	Store       store.Mongo
-	S3Client   	*util.CoffeeShopBucket
+	S3Client   	*aws.CoffeeShopBucket
 	vd          *validator.Validate
-	envs        *util.Config
+	envs        *types.Config
 	token       token.Token
 	distributor workers.TaskDistributor
 }
@@ -28,7 +30,7 @@ type Server struct {
 func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor workers.TaskDistributor) store.Querier {
 	server := &Server{}
 
-	envs, err := util.LoadEnvs("./../../")
+	envs, err := internal.LoadEnvs("./../../")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -38,7 +40,7 @@ func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor worke
 		log.Panic(err)
 	}
 
-	coffeShopBucket := util.NewS3Client(cfg, func(o *s3.Options) {
+	coffeShopBucket := aws.NewS3Client(cfg, func(o *s3.Options) {
 		o.Region = "us-east-1"
 	})
 	server.S3Client = coffeShopBucket
