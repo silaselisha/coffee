@@ -2,7 +2,6 @@ package handler__test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -15,9 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/silaselisha/coffee-api/pkg/handler"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/stretchr/testify/require"
 )
@@ -145,9 +142,6 @@ func TestCreateProduct(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			server := handler.NewServer(ctx, mongoClient, distributor)
 
 			url := "/api/v1/products"
 			recorder := httptest.NewRecorder()
@@ -157,10 +151,7 @@ func TestCreateProduct(t *testing.T) {
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 
-			mux, ok := server.(*handler.Server)
-			require.Equal(t, true, ok)
-
-			mux.Router.ServeHTTP(recorder, request)
+			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
 		})
 	}
@@ -175,8 +166,8 @@ func TestUpdateProduct(t *testing.T) {
 		check      func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name: "update a product",
-			id:   productID,
+			name:  "update a product",
+			id:    productID,
 			token: adminTestToken,
 			bodyWriter: func() (*bytes.Buffer, *multipart.Writer) {
 				body := &bytes.Buffer{}
@@ -194,8 +185,6 @@ func TestUpdateProduct(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
 
 			url := fmt.Sprintf("/api/v1/products/%s", tc.id)
 			recorder := httptest.NewRecorder()
@@ -204,10 +193,6 @@ func TestUpdateProduct(t *testing.T) {
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", tc.token))
-
-			querier := handler.NewServer(ctx, mongoClient, distributor)
-			server, ok := querier.(*handler.Server)
-			require.Equal(t, true, ok)
 
 			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
@@ -230,19 +215,13 @@ func TestGetAllProduct(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			server := handler.NewServer(ctx, mongoClient, distributor)
 
 			url := "/api/v1/products"
 			recorder := httptest.NewRecorder()
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			mux, ok := server.(*handler.Server)
-			require.Equal(t, true, ok)
-
-			mux.Router.ServeHTTP(recorder, request)
+			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
 		})
 	}
@@ -291,19 +270,13 @@ func TestGetProduct(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			server := handler.NewServer(ctx, mongoClient, distributor)
 
 			url := fmt.Sprintf("/api/v1/products/%s/%s", tc.category["category"], tc.id)
 			recorder := httptest.NewRecorder()
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			mux, ok := server.(*handler.Server)
-			require.Equal(t, true, ok)
-
-			mux.Router.ServeHTTP(recorder, request)
+			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
 		})
 	}
@@ -317,16 +290,16 @@ func TestDeleteProduct(t *testing.T) {
 		check func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name: "delete product by id",
-			id:   productID,
+			name:  "delete product by id",
+			id:    productID,
 			token: adminTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNoContent, recorder.Code)
 			},
 		},
 		{
-			name: "delete product by invalid id",
-			id:   "65bcc06cbc92379c5b6fe79b",
+			name:  "delete product by invalid id",
+			id:    "65bcc06cbc92379c5b6fe79b",
 			token: adminTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -336,9 +309,6 @@ func TestDeleteProduct(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			server := handler.NewServer(ctx, mongoClient, distributor)
 
 			url := fmt.Sprintf("/api/v1/products/%s", tc.id)
 			fmt.Println(url)
@@ -348,10 +318,7 @@ func TestDeleteProduct(t *testing.T) {
 
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", tc.token))
 
-			mux, ok := server.(*handler.Server)
-			require.Equal(t, true, ok)
-
-			mux.Router.ServeHTTP(recorder, request)
+			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
 		})
 	}

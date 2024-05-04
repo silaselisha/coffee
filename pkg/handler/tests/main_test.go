@@ -28,6 +28,8 @@ var userTestToken string
 var adminID string
 var adminTestToken string
 var distributor workers.TaskDistributor
+var server *handler.Server
+var ok bool
 
 func TestMain(m *testing.M) {
 	fmt.Println("RUNNING")
@@ -56,8 +58,15 @@ func TestMain(m *testing.M) {
 	request := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(userCred))
 	recorder := httptest.NewRecorder()
 
-	querier := handler.NewServer(context.Background(), mongoClient, distributor)
-	server, ok := querier.(*handler.Server)
+	redisOpts := asynq.RedisClientOpt{
+		Addr: envs.REDIS_SERVER_ADDRESS,
+	}
+	distributor = workers.NewTaskClientDistributor(redisOpts)
+	querier := handler.NewServer(context.Background(), mongoClient, distributor, func() http.Handler {
+		return nil
+	})
+
+	server, ok = querier.(*handler.Server)
 	if !ok {
 		log.Fatal("Failed to initialize server")
 	}
@@ -76,11 +85,6 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 	adminTestToken = res.Token
-
-	redisOpts := asynq.RedisClientOpt{
-		Addr: envs.REDIS_SERVER_ADDRESS,
-	}
-	distributor = workers.NewTaskClientDistributor(redisOpts)
 
 	product = internal.CreateNewProduct()
 	os.Exit(m.Run())
