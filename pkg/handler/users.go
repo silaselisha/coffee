@@ -452,14 +452,13 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(types.AuthPayloadKey{}).(*token.Payload)
-
-	var user store.User
-	if payload.Id != id.Hex() {
+	userInfo := r.Context().Value(types.AuthUserInfoKey{}).(*types.UserInfo)
+	if userInfo.Id.Hex() != id.Hex() {
 		err := errors.New("user only allowed to retrive their person account")
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusForbidden)
 	}
 
+	var user store.User
 	err = collection.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -668,6 +667,7 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	updateUserRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 
 	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
+	deleteUserRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin", "user"))
 	deleteUserRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.DeleteUserByIdHandler))
 	forgotPasswordRouter.HandleFunc("/forgotpassword", internal.HandleFuncDecorator(srv.ForgotPasswordHandler))
 	resetPasswordRouter.HandleFunc("/resetpassword", internal.HandleFuncDecorator(srv.ResetPasswordHandler))
