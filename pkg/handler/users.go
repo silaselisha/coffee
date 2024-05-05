@@ -328,18 +328,8 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	payload := r.Context().Value(types.AuthPayloadKey{}).(*token.Payload)
-	var user store.User
-	err = collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusForbidden)
-		}
-
-		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
-	}
-
-	if payload.Id != user.Id.Hex() {
+	userInfo := r.Context().Value(types.AuthUserInfoKey{}).(*types.UserInfo)
+	if id.Hex() != userInfo.Id.Hex() {
 		err := errors.New("user only allowed to retrive their person account")
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusForbidden)
 	}
@@ -387,7 +377,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 			if err != nil {
 				errs <- err
 			}
-			err = s.distributor.SendS3ObjectDeleteTask(ctx, []string{user.Avatar}, []asynq.Option{asynq.ProcessIn(3 * time.Minute),
+			err = s.distributor.SendS3ObjectDeleteTask(ctx, []string{userInfo.Avatar}, []asynq.Option{asynq.ProcessIn(3 * time.Minute),
 				asynq.MaxRetry(3),
 				asynq.Queue(workers.CriticalQueue)}...)
 			if err != nil {
@@ -674,6 +664,7 @@ func userRoutes(gmux *mux.Router, srv *Server) {
 	postUserRouter.HandleFunc("/login", internal.HandleFuncDecorator(srv.LoginUserHandler))
 
 	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
+	updateUserRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin", "user"))
 	updateUserRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.UpdateUserByIdHandler))
 
 	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
