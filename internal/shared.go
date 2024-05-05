@@ -143,3 +143,10 @@ func ImageProcessor(ctx context.Context, file io.ReadCloser, opts *types.FileMet
 	fileName = fmt.Sprintf("%s.%s", objectName, extension)
 	return
 }
+
+func NewErrorResponse(status string, err string) *types.ErrorResponseParams {
+	return &types.ErrorResponseParams{
+		Status: status,
+		Error:  err,
+	}
+}

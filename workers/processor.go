@@ -171,6 +171,7 @@ func (processor *RedisTaskServerProcessor) ProcessTaskDeleteS3Object(ctx context
 	for _, image := range payload {
 		err := processor.client.DeleteImage(ctx, image, processor.envs.S3_BUCKET_NAME)
 		if err != nil {
+			fmt.Println(err)
 			return err
 		}
 	}

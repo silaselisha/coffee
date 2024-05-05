@@ -204,22 +204,22 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 		case errors.As(err, &mongo.WriteException{}):
 			exception, _ := err.(mongo.WriteException)
 			if exception.WriteErrors[0].Code == 11000 {
-				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
+				return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, mongo.ErrNoDocuments):
 			if err == mongo.ErrNoDocuments {
-				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+				return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 			}
 
 		case errors.Is(err, &json.SyntaxError{}):
-			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		case err.(validator.ValidationErrors) != nil:
-			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		default:
-			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
@@ -250,7 +250,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 			return internal.ResponseHandler(w, productRes, http.StatusOK)
 		}
 
-		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 	defer cur.Close(ctx)
 
@@ -261,7 +261,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 			if err == io.EOF {
 				break
 			}
-			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 
 		product := types.ItemResponseParams{
@@ -292,7 +292,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	vars := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(vars["id"])
 	if err != nil {
-		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
 	filter := bson.D{{Key: "_id", Value: id}, {Key: "category", Value: vars["category"]}}
@@ -302,9 +302,9 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 	err = result.Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 		}
-		return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	product := types.ItemResponseParams{
@@ -402,14 +402,14 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 		case errors.As(err, &mongo.WriteException{}):
 			exception, _ := err.(mongo.WriteException)
 			if exception.WriteErrors[0].Code == 11000 {
-				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
+				return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, mongo.ErrNoDocuments):
-			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("document not found %w", err).Error()), http.StatusNotFound)
 
 		default:
-			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 
@@ -447,8 +447,8 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
-		payload := ctx.Value(types.AuthRoleKey{}).(*types.UserInfo)
-		item.Author = payload.Id
+		userInfo := ctx.Value(types.AuthUserInfoKey{}).(*types.UserInfo)
+		item.Author = userInfo.Id
 
 		for {
 			curr, err := reader.NextPart()
@@ -596,17 +596,17 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		case errors.As(err, &mongo.WriteException{}):
 			exceptionError, _ := err.(mongo.WriteException)
 			if exceptionError.WriteErrors[0].Code == 11000 {
-				return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
+				return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("document already exists %w", err).Error()), http.StatusBadRequest)
 			}
 
 		case errors.Is(err, &json.SyntaxError{}):
-			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("invalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		case err.(validator.ValidationErrors) != nil:
-			return internal.ResponseHandler(w, newErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", fmt.Errorf("ivalid data input for operation %w", err).Error()), http.StatusBadRequest)
 
 		default:
-			return internal.ResponseHandler(w, newErrorResponse("failed", err.Error()), http.StatusInternalServerError)
+			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 	}
 

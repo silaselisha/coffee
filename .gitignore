@@ -28,4 +28,7 @@
 go.work
 go.work.sum
 
+# node_modules
+/node_modules
+
 # End of https://www.toptal.com/developers/gitignore/api/go

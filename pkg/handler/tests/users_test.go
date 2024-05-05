@@ -2,7 +2,6 @@ package handler__test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -13,10 +12,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/silaselisha/coffee-api/internal"
-	"github.com/silaselisha/coffee-api/pkg/handler"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/stretchr/testify/require"
 )
@@ -90,20 +87,14 @@ func TestCreateUserSignup(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			url := "/api/v1/signup"
 
+			url := "/api/v1/signup"
 			body, err := json.Marshal(tc.body)
 			require.NoError(t, err)
 			require.NotEmpty(t, body)
 
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(body))
-
-			querier := handler.NewServer(ctx, mongoClient, distributor)
-			server, ok := querier.(*handler.Server)
-			require.Equal(t, true, ok)
 
 			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
@@ -169,21 +160,14 @@ func TestUserLogin(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
 
 			url := "/api/v1/login"
-
 			userCred, err := json.Marshal(tc.body)
 			require.NoError(t, err)
 			require.NotEmpty(t, userCred)
 
 			request := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(userCred))
 			recorder := httptest.NewRecorder()
-
-			querier := handler.NewServer(ctx, mongoClient, distributor)
-			server, ok := querier.(*handler.Server)
-			require.Equal(t, true, ok)
 
 			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
@@ -210,17 +194,11 @@ func TestGetAllUsers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
 
 			url := "/api/v1/users"
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodGet, url, nil)
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", tc.token))
-
-			querier := handler.NewServer(ctx, mongoClient, distributor)
-			server, ok := querier.(*handler.Server)
-			require.Equal(t, true, ok)
 
 			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
@@ -294,17 +272,11 @@ func TestGetUserById(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
 
 			url := fmt.Sprintf("/api/v1/users/%s", tc.id)
 			request := httptest.NewRequest(http.MethodGet, url, nil)
 			recorder := httptest.NewRecorder()
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", tc.token))
-
-			querier := handler.NewServer(ctx, mongoClient, distributor)
-			server, ok := querier.(*handler.Server)
-			require.Equal(t, true, ok)
 
 			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
@@ -408,9 +380,7 @@ func TestUpdateUserById(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-	
+
 			url := fmt.Sprintf("/api/v1/users/%s", tc.id)
 			body, writer := tc.bodyWriter()
 			recorder := httptest.NewRecorder()
@@ -418,11 +388,7 @@ func TestUpdateUserById(t *testing.T) {
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", tc.token))
-	
-			querier := handler.NewServer(ctx, mongoClient, distributor)
-			server, ok := querier.(*handler.Server)
-			require.Equal(t, true, ok)
-	
+
 			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
 		})
@@ -478,17 +444,11 @@ func TestDeleteUser(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
 
 			url := fmt.Sprintf("/api/v1/users/%s", tc.userId)
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodDelete, url, nil)
 			request.Header.Set("authorization", fmt.Sprintf("Bearer %s", tc.token))
-
-			querier := handler.NewServer(ctx, mongoClient, distributor)
-			server, ok := querier.(*handler.Server)
-			require.Equal(t, true, ok)
 
 			server.Router.ServeHTTP(recorder, request)
 			tc.check(t, recorder)
