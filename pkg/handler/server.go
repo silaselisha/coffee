@@ -59,8 +59,7 @@ func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor worke
 	server.vd = validate
 
 	router := mux.NewRouter()
-	router.Handle("/*", serveStaticFiles()) // serve static files
-	router.Handle("/", templ.Handler(home.Home("landing")))
+	render(router, serveStaticFiles) // serve pages to client
 
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
 	productRoutes(apiRouter, server)
@@ -68,4 +67,9 @@ func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor worke
 
 	server.Router = router
 	return server
+}
+
+func render(router *mux.Router, serveStaticFiles func() http.Handler) {
+	router.Handle("/*", serveStaticFiles()) // serve static files
+	router.Handle("/", templ.Handler(home.Home("landing")))
 }
