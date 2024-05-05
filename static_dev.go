@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-func pain() http.Handler {
+func public() http.Handler {
 	fmt.Println("serving static files in DEV mode")
 	return http.StripPrefix("/public/", http.FileServerFS(os.DirFS("public")))
 }

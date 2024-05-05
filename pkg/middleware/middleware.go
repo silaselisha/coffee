@@ -99,10 +99,12 @@ func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handle
 
 			var userInfo *types.UserInfo = &types.UserInfo{
 				Role: role,
+				Email: user.Email,
+				Avatar: user.Avatar,
 				Id: id,
 			}
 			
-			ctx := context.WithValue(r.Context(), types.AuthRoleKey{}, userInfo)
+			ctx := context.WithValue(r.Context(), types.AuthUserInfoKey{}, userInfo)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})
