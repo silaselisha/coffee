@@ -47,7 +47,7 @@ func main() {
 	}
 
 	distributor := workers.NewTaskClientDistributor(redisOpts)
-	querier := api.NewServer(ctx, mongo_client, distributor, serveStaticFiles)
+	querier := api.NewServer(ctx, mongo_client, distributor, public)
 	server := querier.(*api.Server)
 
 	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error { return nil })
@@ -58,7 +58,6 @@ func main() {
 	client := aws.NewS3Client(cfg, func(o *s3.Options) {
 		o.Region = "us-east-1"
 	})
-	serveStaticFiles()
 
 	go taskProcessor(redisOpts, server.Store, *envs, client)
 
@@ -82,7 +81,7 @@ func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Conf
 	}
 }
 
-func serveStaticFiles() http.Handler {
-	fs := http.FileServer(http.Dir("./public/"))
-	return http.StripPrefix("/public/", fs)
-}
+// func serveStaticFiles() http.Handler {
+// 	fs := http.FileServer(http.Dir("./public/"))
+// 	return http.StripPrefix("/public/", fs)
+// }
