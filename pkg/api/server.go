@@ -71,6 +71,6 @@ func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor worke
 }
 
 func render(router *mux.Router, templ handler.Querier, serveStaticFiles func() http.Handler) {
-	router.Handle("/static/", serveStaticFiles())
+	router.PathPrefix("/public/").Handler(serveStaticFiles())
 	router.HandleFunc("/", internal.HandleFuncDecorator(templ.RenderHomePageHandler))
 }

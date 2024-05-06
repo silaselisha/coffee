@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"log"
@@ -84,5 +83,6 @@ func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Conf
 }
 
 func serveStaticFiles() http.Handler {
-	return http.StripPrefix("static/", http.FileServerFS(os.DirFS("public")))
+	fs := http.FileServer(http.Dir("./public/"))
+	return http.StripPrefix("/public/", fs)
 }
