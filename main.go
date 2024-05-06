@@ -11,11 +11,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/hibiken/asynq"
-	"github.com/silaselisha/coffee-api/pkg/handler"
-	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/types"
 	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/internal/aws"
+	"github.com/silaselisha/coffee-api/pkg/api"
+	"github.com/silaselisha/coffee-api/pkg/store"
+	"github.com/silaselisha/coffee-api/types"
 	"github.com/silaselisha/coffee-api/workers"
 )
 
@@ -47,8 +47,8 @@ func main() {
 	}
 
 	distributor := workers.NewTaskClientDistributor(redisOpts)
-	querier := handler.NewServer(ctx, mongo_client, distributor, public)
-	server := querier.(*handler.Server)
+	querier := api.NewServer(ctx, mongo_client, distributor, serveStaticFiles)
+	server := querier.(*api.Server)
 
 	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error { return nil })
 	if err != nil {
@@ -58,6 +58,7 @@ func main() {
 	client := aws.NewS3Client(cfg, func(o *s3.Options) {
 		o.Region = "us-east-1"
 	})
+	serveStaticFiles()
 
 	go taskProcessor(redisOpts, server.Store, *envs, client)
 
@@ -79,4 +80,9 @@ func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Conf
 		log.Panic(err)
 		return
 	}
+}
+
+func serveStaticFiles() http.Handler {
+	fs := http.FileServer(http.Dir("./public/"))
+	return http.StripPrefix("/public/", fs)
 }

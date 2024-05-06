@@ -13,6 +13,7 @@ type Item struct {
 	Price       float64            `bson:"price" validate:"required"`
 	Summary     string             `bson:"summary" validate:"required"`
 	Category    string             `bson:"category" validate:"required,oneof=beverages snacks"`
+	Discount    uint32             `bson:"discount"`
 	Author      primitive.ObjectID `bson:"author"`
 	Thumbnail   string             `bson:"thumbnail"`
 	Description string             `bson:"description" validate:"required"`
@@ -42,27 +43,19 @@ type Reservation struct {
 	UpdatedAt time.Time          `bson:"updated_at"`
 }
 
-type OrderStatus int32
-
-const (
-	PENDING OrderStatus = iota
-	REJECTED
-	PAID
-)
-
-type ItemOrder struct {
-	Item        primitive.ObjectID `bson:"item"`
-	Quantity    int64              `bson:"quantity"`
-	Discount    float64            `bson:"discount"`
+type OrderItem struct {
+	Product  primitive.ObjectID `bson:"product"`
+	Quantity uint32             `bson:"quantity"`
+	Amount   float64            `bson:"amount"`
 }
 
 type Order struct {
 	Id            primitive.ObjectID `bson:"_id"`
-	User          primitive.ObjectID `bson:"user"`
-	Items         []ItemOrder        `bosn:"items"`
-	TotalDiscount float64            `bson:"total_discount"`
+	Items         []OrderItem        `bson:"items"`
 	TotalAmount   float64            `bson:"total_amount"`
-	Status        OrderStatus        `bson:"status"`
+	Owner         primitive.ObjectID `bson:"owner"`
+	Status        string             `bson:"status"`
+	TotalDiscount float64            `bson:"total_discount"`
 	CreatedAt     time.Time          `bson:"created_at"`
 	UpdatedAt     time.Time          `bson:"updated_at"`
 }
