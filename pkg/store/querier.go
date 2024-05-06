@@ -7,6 +7,7 @@ import (
 
 type Querier interface {
 	UsersQueries
+	OrdersQueries
 	ProductsQueries
 }
 
@@ -26,4 +27,8 @@ type ProductsQueries interface {
 	DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
+}
+
+type OrdersQueries interface {
+	CreateOrderHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 }
