@@ -30,12 +30,7 @@ func main() {
 		return
 	}
 
-	mongo_client, err := internal.Connect(ctx, envs)
-	if err != nil {
-		log.Panic(err)
-		return
-	}
-
+	server, redisOpts, client, mongo_client := mainHelper(ctx, envs)
 	defer func() {
 		if err := mongo_client.Disconnect(ctx); err != nil {
 			log.Panic(err)
@@ -43,7 +38,6 @@ func main() {
 		}
 	}()
 
-	server, redisOpts, client := mainHelper(ctx, envs, mongo_client)
 	go taskProcessor(redisOpts, server.Store, *envs, client)
 
 	fmt.Printf("serving HTTP/REST server\n")
@@ -56,7 +50,13 @@ func main() {
 	}
 }
 
-func mainHelper(ctx context.Context, envs *types.Config, mongo_client *mongo.Client) (server *api.Server, redisOpts asynq.RedisClientOpt, client *aws.CoffeeShopBucket) {
+func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, redisOpts asynq.RedisClientOpt, client *aws.CoffeeShopBucket, mongo_client *mongo.Client) {
+	mongo_client, err := internal.Connect(ctx, envs)
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+
 	redisOpts = asynq.RedisClientOpt{
 		Addr: envs.REDIS_SERVER_ADDRESS,
 	}
