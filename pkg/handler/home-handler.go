@@ -9,6 +9,5 @@ func (tmpl *Templates) RenderHomePageHandler(ctx context.Context, w http.Respons
 	vars := struct {
 		Name string
 	}{Name: "HOME PAGE"}
-	return render(tmpl.templates, w, "main", vars)
-
+	return wrietWebPage(tmpl.templates, w, "main", vars)
 }

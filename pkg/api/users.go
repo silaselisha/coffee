@@ -280,12 +280,12 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 
 	payload := ctx.Value(types.AuthPayloadKey{}).(*token.Payload)
 	userInfo := ctx.Value(types.AuthUserInfoKey{}).(*types.UserInfo)
-	
+
 	if payload.Id != id.Hex() && userInfo.Role != "admin" {
 		err := errors.New("user only allowed to retrive their person account")
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusForbidden)
 	}
-	
+
 	curr := collection.FindOne(ctx, bson.D{{Key: "_id", Value: id}})
 	var user store.User
 	err = curr.Decode(&user)

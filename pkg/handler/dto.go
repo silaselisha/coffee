@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
-	"fmt"
 	"net/http"
+	"path"
 	"text/template"
 )
 
@@ -15,18 +15,18 @@ type Templates struct {
 	templates *template.Template
 }
 
-func NewTemplate() Querier {
+func NewTemplate(filePath string) Querier {
+	viewsPath := path.Join(filePath, "views", "**", "*.html")
 	return &Templates{
-		templates: template.Must(template.ParseGlob("views/**/*.html")),
+		templates: template.Must(template.ParseGlob(viewsPath)),
 	}
 }
 
-func render(tmpl *template.Template, w http.ResponseWriter, name string, vars interface{}) error {
+func wrietWebPage(tmpl *template.Template, w http.ResponseWriter, name string, vars interface{}) error {
 	// set cookies && sessions
 	err := tmpl.ExecuteTemplate(w, name, vars)
 	if err != nil {
-		fmt.Println(err)
-		http.Error(w, "Failed to load template: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to load template: "+err.Error(), http.StatusInternalServerError)
 		return err
 	}
 	return nil

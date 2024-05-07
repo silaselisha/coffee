@@ -14,50 +14,30 @@ import (
 	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/internal/aws"
 	"github.com/silaselisha/coffee-api/pkg/api"
+	"github.com/silaselisha/coffee-api/pkg/handler"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/silaselisha/coffee-api/workers"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
 	envs, err := internal.LoadEnvs(".")
 	if err != nil {
 		log.Panic(err)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	mongo_client, err := internal.Connect(ctx, envs)
-	if err != nil {
-		log.Panic(err)
-		return
-	}
-
+	server, redisOpts, client, mongo_client := mainHelper(ctx, envs)
 	defer func() {
 		if err := mongo_client.Disconnect(ctx); err != nil {
 			log.Panic(err)
 			return
 		}
 	}()
-
-	redisOpts := asynq.RedisClientOpt{
-		Addr: envs.REDIS_SERVER_ADDRESS,
-	}
-
-	distributor := workers.NewTaskClientDistributor(redisOpts)
-	querier := api.NewServer(ctx, mongo_client, distributor, public)
-	server := querier.(*api.Server)
-
-	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error { return nil })
-	if err != nil {
-		log.Panic(err)
-		return
-	}
-	client := aws.NewS3Client(cfg, func(o *s3.Options) {
-		o.Region = "us-east-1"
-	})
 
 	go taskProcessor(redisOpts, server.Store, *envs, client)
 
@@ -71,6 +51,35 @@ func main() {
 	}
 }
 
+func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, redisOpts asynq.RedisClientOpt, client *aws.CoffeeShopBucket, mongo_client *mongo.Client) {
+	mongo_client, err := internal.Connect(ctx, envs)
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+
+	redisOpts = asynq.RedisClientOpt{
+		Addr: envs.REDIS_SERVER_ADDRESS,
+	}
+
+	// template bootstrap
+	templQueries := handler.NewTemplate(".")
+
+	distributor := workers.NewTaskClientDistributor(redisOpts)
+	querier := api.NewServer(ctx, envs, mongo_client, distributor, templQueries, public)
+	server = querier.(*api.Server)
+
+	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error { return nil })
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+	client = aws.NewS3Client(cfg, func(o *s3.Options) {
+		o.Region = "us-east-1"
+	})
+	return 
+}
+
 func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Config, client *aws.CoffeeShopBucket) {
 	processor := workers.NewTaskServerProcessor(opts, store, envs, client)
 	log.Print("worker process on")
@@ -80,8 +89,3 @@ func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Conf
 		return
 	}
 }
-
-// func serveStaticFiles() http.Handler {
-// 	fs := http.FileServer(http.Dir("./public/"))
-// 	return http.StripPrefix("/public/", fs)
-// }

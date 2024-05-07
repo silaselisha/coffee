@@ -1,4 +1,3 @@
-//+build dev
 //go:build dev
 // +build dev
 
@@ -11,6 +10,6 @@ import (
 )
 
 func public() http.Handler {
-	fmt.Println("SERVING STATIC FILES IN DEV ENVIRONMENT")
+	fmt.Println("DEV MODE: **FILE SERVER**")
 	return http.StripPrefix("/public/", http.FileServerFS(os.DirFS("public")))
 }
