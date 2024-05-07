@@ -17,17 +17,18 @@ import (
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/silaselisha/coffee-api/workers"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
 	envs, err := internal.LoadEnvs(".")
 	if err != nil {
 		log.Panic(err)
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
 
 	mongo_client, err := internal.Connect(ctx, envs)
 	if err != nil {
@@ -42,23 +43,7 @@ func main() {
 		}
 	}()
 
-	redisOpts := asynq.RedisClientOpt{
-		Addr: envs.REDIS_SERVER_ADDRESS,
-	}
-
-	distributor := workers.NewTaskClientDistributor(redisOpts)
-	querier := api.NewServer(ctx, mongo_client, distributor, public)
-	server := querier.(*api.Server)
-
-	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error { return nil })
-	if err != nil {
-		log.Panic(err)
-		return
-	}
-	client := aws.NewS3Client(cfg, func(o *s3.Options) {
-		o.Region = "us-east-1"
-	})
-
+	server, redisOpts, client := mainHelper(ctx, envs, mongo_client)
 	go taskProcessor(redisOpts, server.Store, *envs, client)
 
 	fmt.Printf("serving HTTP/REST server\n")
@@ -71,6 +56,26 @@ func main() {
 	}
 }
 
+func mainHelper(ctx context.Context, envs *types.Config, mongo_client *mongo.Client) (server *api.Server, redisOpts asynq.RedisClientOpt, client *aws.CoffeeShopBucket) {
+	redisOpts = asynq.RedisClientOpt{
+		Addr: envs.REDIS_SERVER_ADDRESS,
+	}
+
+	distributor := workers.NewTaskClientDistributor(redisOpts)
+	querier := api.NewServer(ctx, envs, mongo_client, distributor, public)
+	server = querier.(*api.Server)
+
+	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error { return nil })
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+	client = aws.NewS3Client(cfg, func(o *s3.Options) {
+		o.Region = "us-east-1"
+	})
+	return 
+}
+
 func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Config, client *aws.CoffeeShopBucket) {
 	processor := workers.NewTaskServerProcessor(opts, store, envs, client)
 	log.Print("worker process on")
@@ -80,8 +85,3 @@ func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Conf
 		return
 	}
 }
-
-// func serveStaticFiles() http.Handler {
-// 	fs := http.FileServer(http.Dir("./public/"))
-// 	return http.StripPrefix("/public/", fs)
-// }

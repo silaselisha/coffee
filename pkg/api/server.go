@@ -29,38 +29,15 @@ type Server struct {
 	distributor workers.TaskDistributor
 }
 
-func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor workers.TaskDistributor, serveStaticFiles func() http.Handler) store.Querier {
+func NewServer(ctx context.Context, envs *types.Config, mongoClient *mongo.Client, distributor workers.TaskDistributor, fileServer func() http.Handler) store.Querier {
 	server := &Server{}
 
-	envs, err := internal.LoadEnvs("./../../")
-	if err != nil {
-		log.Panic(err)
-	}
-
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	coffeShopBucket := aws.NewS3Client(cfg, func(o *s3.Options) {
-		o.Region = "us-east-1"
-	})
-	server.S3Client = coffeShopBucket
-
-	tkn := token.NewToken(envs.SECRET_ACCESS_KEY)
-	store := store.NewMongoClient(mongoClient)
-	server.Store = store
-	server.envs = envs
-	server.token = tkn
-	server.distributor = distributor
-
-	validate := validator.New(validator.WithRequiredStructEnabled())
-	server.vd = validate
+	newServerHelper(ctx, envs, mongoClient, server, distributor)
 
 	router := mux.NewRouter()
 
 	templ := handler.NewTemplate()
-	render(router, templ, serveStaticFiles) // serve static files
+	render(router, templ, fileServer) // serve static files
 
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
 	productRoutes(apiRouter, server)
@@ -70,7 +47,29 @@ func NewServer(ctx context.Context, mongoClient *mongo.Client, distributor worke
 	return server
 }
 
-func render(router *mux.Router, templ handler.Querier, serveStaticFiles func() http.Handler) {
-	router.PathPrefix("/public/").Handler(serveStaticFiles())
+func newServerHelper(ctx context.Context, envs *types.Config, mongoClient *mongo.Client, server *Server, distributor workers.TaskDistributor) {
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	coffeShopBucket := aws.NewS3Client(cfg, func(o *s3.Options) {
+		o.Region = "us-east-1"
+	})
+
+	tkn := token.NewToken(envs.SECRET_ACCESS_KEY)
+	store := store.NewMongoClient(mongoClient)
+	server.S3Client = coffeShopBucket
+	server.Store = store
+	server.envs = envs
+	server.token = tkn
+	server.distributor = distributor
+
+	validate := validator.New(validator.WithRequiredStructEnabled())
+	server.vd = validate
+}
+
+func render(router *mux.Router, templ handler.Querier, fileServer func() http.Handler) {
+	router.PathPrefix("/public/").Handler(fileServer())
 	router.HandleFunc("/", internal.HandleFuncDecorator(templ.RenderHomePageHandler))
 }

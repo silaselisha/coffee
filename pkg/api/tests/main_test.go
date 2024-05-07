@@ -62,7 +62,7 @@ func TestMain(m *testing.M) {
 		Addr: envs.REDIS_SERVER_ADDRESS,
 	}
 	distributor = workers.NewTaskClientDistributor(redisOpts)
-	querier := api.NewServer(context.Background(), mongoClient, distributor, func() http.Handler { return nil})
+	querier := api.NewServer(context.Background(), envs, mongoClient, distributor, func() http.Handler { return nil })
 
 	server, ok = querier.(*api.Server)
 	if !ok {

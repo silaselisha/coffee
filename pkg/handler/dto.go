@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"text/template"
 )
@@ -21,12 +20,11 @@ func NewTemplate() Querier {
 	}
 }
 
-func render(tmpl *template.Template, w http.ResponseWriter, name string, vars interface{}) error {
+func wrietWebPage(tmpl *template.Template, w http.ResponseWriter, name string, vars interface{}) error {
 	// set cookies && sessions
 	err := tmpl.ExecuteTemplate(w, name, vars)
 	if err != nil {
-		fmt.Println(err)
-		http.Error(w, "Failed to load template: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to load template: "+err.Error(), http.StatusInternalServerError)
 		return err
 	}
 	return nil
