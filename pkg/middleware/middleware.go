@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -84,7 +83,6 @@ func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handle
 
 			err = curr.Decode(&user)
 			if err != nil {
-				fmt.Println(err)
 				err := errors.New("user forbidden to perform an operation on this resource")
 				http.Error(w, err.Error(), http.StatusForbidden)
 				return
@@ -98,12 +96,12 @@ func RestrictToMiddleware(str store.Mongo, args ...string) func(next http.Handle
 			}
 
 			var userInfo *types.UserInfo = &types.UserInfo{
-				Role: role,
-				Email: user.Email,
+				Role:   role,
+				Email:  user.Email,
 				Avatar: user.Avatar,
-				Id: id,
+				Id:     id,
 			}
-			
+
 			ctx := context.WithValue(r.Context(), types.AuthUserInfoKey{}, userInfo)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)

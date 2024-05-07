@@ -29,15 +29,14 @@ type Server struct {
 	distributor workers.TaskDistributor
 }
 
-func NewServer(ctx context.Context, envs *types.Config, mongoClient *mongo.Client, distributor workers.TaskDistributor, fileServer func() http.Handler) store.Querier {
+func NewServer(ctx context.Context, envs *types.Config, mongoClient *mongo.Client, distributor workers.TaskDistributor, templQueries handler.Querier, fileServer func() http.Handler) store.Querier {
 	server := &Server{}
 
 	newServerHelper(ctx, envs, mongoClient, server, distributor)
 
 	router := mux.NewRouter()
 
-	templ := handler.NewTemplate()
-	render(router, templ, fileServer) // serve static files
+	render(router, templQueries, fileServer) // serve static files
 
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
 	productRoutes(apiRouter, server)
@@ -69,7 +68,7 @@ func newServerHelper(ctx context.Context, envs *types.Config, mongoClient *mongo
 	server.vd = validate
 }
 
-func render(router *mux.Router, templ handler.Querier, fileServer func() http.Handler) {
+func render(router *mux.Router, templQueries handler.Querier, fileServer func() http.Handler) {
 	router.PathPrefix("/public/").Handler(fileServer())
-	router.HandleFunc("/", internal.HandleFuncDecorator(templ.RenderHomePageHandler))
+	router.HandleFunc("/", internal.HandleFuncDecorator(templQueries.RenderHomePageHandler))
 }

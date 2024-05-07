@@ -15,6 +15,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/pkg/api"
+	"github.com/silaselisha/coffee-api/pkg/handler"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/workers"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -61,8 +62,10 @@ func TestMain(m *testing.M) {
 	redisOpts := asynq.RedisClientOpt{
 		Addr: envs.REDIS_SERVER_ADDRESS,
 	}
+
+	templQueries := handler.NewTemplate("../../..")
 	distributor = workers.NewTaskClientDistributor(redisOpts)
-	querier := api.NewServer(context.Background(), envs, mongoClient, distributor, func() http.Handler { return nil })
+	querier := api.NewServer(context.Background(), envs, mongoClient, distributor, templQueries, func() http.Handler { return nil })
 
 	server, ok = querier.(*api.Server)
 	if !ok {

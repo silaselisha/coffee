@@ -14,6 +14,7 @@ import (
 	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/internal/aws"
 	"github.com/silaselisha/coffee-api/pkg/api"
+	"github.com/silaselisha/coffee-api/pkg/handler"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/silaselisha/coffee-api/workers"
@@ -61,8 +62,11 @@ func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, re
 		Addr: envs.REDIS_SERVER_ADDRESS,
 	}
 
+	// template bootstrap
+	templQueries := handler.NewTemplate(".")
+
 	distributor := workers.NewTaskClientDistributor(redisOpts)
-	querier := api.NewServer(ctx, envs, mongo_client, distributor, public)
+	querier := api.NewServer(ctx, envs, mongo_client, distributor, templQueries, public)
 	server = querier.(*api.Server)
 
 	cfg, err := config.LoadDefaultConfig(ctx, func(lo *config.LoadOptions) error { return nil })

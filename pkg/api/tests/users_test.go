@@ -414,12 +414,12 @@ func TestDeleteUser(t *testing.T) {
 			},
 		},
 		{
-			name:   "delete user's account | status 400",
+			name:   "delete user's account | status 403",
 			body:   map[string]interface{}{},
 			userId: "1234",
 			token:  userTestToken,
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
 		},
 		{

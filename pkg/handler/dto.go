@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"path"
 	"text/template"
 )
 
@@ -14,9 +15,10 @@ type Templates struct {
 	templates *template.Template
 }
 
-func NewTemplate() Querier {
+func NewTemplate(filePath string) Querier {
+	viewsPath := path.Join(filePath, "views", "**", "*.html")
 	return &Templates{
-		templates: template.Must(template.ParseGlob("views/**/*.html")),
+		templates: template.Must(template.ParseGlob(viewsPath)),
 	}
 }
 
