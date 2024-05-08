@@ -35,7 +35,7 @@ var ok bool
 func TestMain(m *testing.M) {
 	fmt.Println("RUNNING")
 	var err error
-	envs, err := internal.LoadEnvs("./../../..")
+	envs, err := internal.LoadEnvs("../../..")
 	if err != nil {
 		log.Fatal(err)
 	}
