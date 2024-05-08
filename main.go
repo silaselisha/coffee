@@ -62,7 +62,6 @@ func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, re
 		Addr: envs.REDIS_SERVER_ADDRESS,
 	}
 
-	// template bootstrap
 	templQueries := handler.NewTemplate(".")
 
 	distributor := workers.NewTaskClientDistributor(redisOpts)
