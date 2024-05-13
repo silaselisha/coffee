@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/hibiken/asynq"
+	"github.com/rs/cors"
 	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/internal/aws"
 	"github.com/silaselisha/coffee-api/pkg/api"
@@ -44,7 +45,8 @@ func main() {
 	fmt.Printf("serving HTTP/REST server\n")
 	fmt.Printf("http://localhost:%v/\n", envs.SERVER_REST_ADDRESS)
 
-	err = http.ListenAndServe(envs.SERVER_REST_ADDRESS, server.Router)
+	handler := cors.Default().Handler(server.Router)
+	err = http.ListenAndServe(envs.SERVER_REST_ADDRESS, handler)
 	if err != nil {
 		log.Panic(err)
 		return
@@ -76,7 +78,7 @@ func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, re
 	client = aws.NewS3Client(cfg, func(o *s3.Options) {
 		o.Region = "us-east-1"
 	})
-	return 
+	return
 }
 
 func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Config, client *aws.CoffeeShopBucket) {
