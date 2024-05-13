@@ -1,3 +1,47 @@
 {{block "navigation" .}}
-   
+    <div class="flex flex-col px-9 pt-4 border-box text-base bg-white">
+        <div class="flex justify-between items-center">
+            <div class="border-gray-700 border relative w-64">
+                <input type="text" name="search" id="" placeholder="Search..." class="px-4 py-2 border-0 w-full outline-none">
+                <i class="fa-solid fa-magnifying-glass absolute right-3 top-3 cursor-pointer text-lg"></i>
+            </div>
+            <div class="cursor-pointer">
+                <img src="/public/images/new-logo-black.avif" alt="logo">
+            </div>
+            <div class="flex justify-between items-center">
+                <div class="mr-4 cursor-pointer hover:bg-gray-300 hover:rounded-md hover:duration-100 hover:delay-100 hover:ease-in-out p-2 transition">
+                    <i class="fa-regular fa-user text-xl mx-1"></i>
+                    <span class="text-lg">Log in</span>
+                </div>
+                <div class="mr-4 cursor-pointer hover:bg-gray-300  hover:rounded-md hover:duration-100 hover:delay-100 hover:ease-in-out p-2 transition">
+                    <i class="fa-solid fa-bag-shopping text-xl mx-1"></i>
+                    <span class="text-lg">Cart</span>
+                </div>
+            </div>
+        </div>
+
+        <nav class="mt-8">
+            <ul class="flex justify-center items-center text-base">
+                <li class="mx-4 cursor-pointer">
+                    <a href="" class="">Shop</a>
+                    <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
+                </li>
+                <li class="mx-4 cursor-pointer">
+                    <a href="" class="">Subscribe</a>
+                    <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
+                </li>
+                <li class="mx-4 cursor-pointer">
+                    <a href="" class="">Store</a>
+                    <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
+                </li>
+                <li class="mx-4 cursor-pointer">
+                    <a href="" class="">Lifestyle</a>
+                    <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
+                </li>
+                <li class="mx-4 cursor-pointer">
+                    <a href="" class="">Mobile Odering</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
 {{end}}
