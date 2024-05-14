@@ -31,5 +31,8 @@ go.work.sum
 # Node Modules
 /node_modules
 
+# Air hot reloading
+/tmp
+
 
 # End of https://www.toptal.com/developers/gitignore/api/go
