@@ -1,5 +1,5 @@
 {{block "navigation" .}}
-    <div class="flex flex-col px-9 pt-4 border-box text-base bg-white">
+    <div class="flex flex-col px-9 pt-4 border-box text-base relative">
         <div class="flex justify-between items-center">
             <div class="border-gray-700 border relative w-64">
                 <input type="text" name="search" id="" placeholder="Search..." class="px-4 py-2 border-0 w-full outline-none">
@@ -20,26 +20,26 @@
             </div>
         </div>
 
-        <nav class="mt-8">
-            <ul class="flex justify-center items-center text-base">
+        <nav class="mt-8 p-2">
+            <ul class="flex justify-center items-center text-base p-2">
                 <li class="mx-4 cursor-pointer">
-                    <a href="" class="">Shop</a>
+                        <a href="" class="cursor-pointer">Shop</a>
+                        <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
+                </li>
+                <li class="mx-4 cursor-pointer">
+                    <a href="" class="cursor-pointer">Subscribe</a>
                     <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
                 </li>
                 <li class="mx-4 cursor-pointer">
-                    <a href="" class="">Subscribe</a>
+                    <a href="" class="cursor-pointer">Store</a>
                     <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
                 </li>
                 <li class="mx-4 cursor-pointer">
-                    <a href="" class="">Store</a>
+                    <a href="" class="cursor-pointer">Lifestyle</a>
                     <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
                 </li>
                 <li class="mx-4 cursor-pointer">
-                    <a href="" class="">Lifestyle</a>
-                    <i class="fa-solid fa-angle-down text-sm text-bold cursor-pointer"></i>
-                </li>
-                <li class="mx-4 cursor-pointer">
-                    <a href="" class="">Mobile Odering</a>
+                    <a href="" class="cursor-pointer">Mobile Odering</a>
                 </li>
             </ul>
         </nav>
