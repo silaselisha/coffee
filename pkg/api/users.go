@@ -360,7 +360,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 			}
 
 			objectKey := fmt.Sprintf("images/avatars/%s", filename)
-			err = s.S3Client.UploadImage(ctx, objectKey, s.envs.S3_BUCKET_NAME, extension, data)
+			err = s.coffeeShopS3Bucket.UploadImage(ctx, objectKey, s.envs.S3_BUCKET_NAME, extension, data)
 			if err != nil {
 				errs <- err
 				return
@@ -471,7 +471,7 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	errs := make(chan error)
 	go func() {
 		avatarURL := user.Avatar
-		err := s.S3Client.DeleteImage(ctx, avatarURL, s.envs.S3_BUCKET_NAME)
+		err := s.coffeeShopS3Bucket.DeleteImage(ctx, avatarURL, s.envs.S3_BUCKET_NAME)
 		if err != nil {
 			errs <- err
 			return

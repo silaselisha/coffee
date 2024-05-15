@@ -31,13 +31,13 @@ type TaskProcessor interface {
 }
 
 type RedisTaskServerProcessor struct {
-	server *asynq.Server
-	store  store.Mongo
-	envs   types.Config
-	client *aws.CoffeeShopBucket
+	server             *asynq.Server
+	store              store.Mongo
+	envs               types.Config
+	coffeeShopS3Bucket aws.CoffeeShopBucket
 }
 
-func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Config, client *aws.CoffeeShopBucket) TaskProcessor {
+func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Config, coffeeShopS3Bucket aws.CoffeeShopBucket) TaskProcessor {
 
 	server := asynq.NewServer(opts, asynq.Config{
 		Queues: map[string]int{CriticalQueue: 1, DefaultQueue: 2},
@@ -47,10 +47,10 @@ func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs t
 	})
 
 	return &RedisTaskServerProcessor{
-		server: server,
-		store:  store,
-		envs:   envs,
-		client: client,
+		server:             server,
+		store:              store,
+		envs:               envs,
+		coffeeShopS3Bucket: coffeeShopS3Bucket,
 	}
 }
 
@@ -128,7 +128,7 @@ func (processor *RedisTaskServerProcessor) ProcessTaskUploadS3Object(ctx context
 	fmt.Printf("BEGIN @%+v\n", time.Now())
 	fmt.Printf("start processing task %+s\n", task.Type())
 
-	err = processor.client.UploadImage(ctx, Payload.ObjectKey, processor.envs.S3_BUCKET_NAME, Payload.Extension, Payload.Image)
+	err = processor.coffeeShopS3Bucket.UploadImage(ctx, Payload.ObjectKey, processor.envs.S3_BUCKET_NAME, Payload.Extension, Payload.Image)
 	if err != nil {
 		fmt.Print(time.Now())
 		return err
@@ -149,7 +149,7 @@ func (processor *RedisTaskServerProcessor) ProcessTaskMultipleUploadS3Object(ctx
 	fmt.Printf("BEGIN @%+v\n", time.Now())
 	fmt.Printf("start processing task %+s\n", task.Type())
 
-	err = processor.client.UploadMultipleImages(ctx, Payload, processor.envs.S3_BUCKET_NAME)
+	err = processor.coffeeShopS3Bucket.UploadMultipleImages(ctx, Payload, processor.envs.S3_BUCKET_NAME)
 	if err != nil {
 		fmt.Print(time.Now())
 		return err
@@ -169,7 +169,7 @@ func (processor *RedisTaskServerProcessor) ProcessTaskDeleteS3Object(ctx context
 	fmt.Printf("BEGIN @%+v\n", time.Now())
 	fmt.Printf("start processing task %+s\n", task.Type())
 	for _, image := range payload {
-		err := processor.client.DeleteImage(ctx, image, processor.envs.S3_BUCKET_NAME)
+		err := processor.coffeeShopS3Bucket.DeleteImage(ctx, image, processor.envs.S3_BUCKET_NAME)
 		if err != nil {
 			fmt.Println(err)
 			return err
