@@ -20,13 +20,13 @@ import (
 )
 
 type Server struct {
-	Router      *mux.Router
-	Store       store.Mongo
-	S3Client    *aws.CoffeeShopBucket
-	vd          *validator.Validate
-	envs        *types.Config
-	token       token.Token
-	distributor workers.TaskDistributor
+	Router             *mux.Router
+	Store              store.Mongo
+	coffeeShopS3Bucket aws.CoffeeShopBucket
+	vd                 *validator.Validate
+	envs               *types.Config
+	token              token.Token
+	distributor        workers.TaskDistributor
 }
 
 func NewServer(ctx context.Context, envs *types.Config, mongoClient *mongo.Client, distributor workers.TaskDistributor, templQueries handler.Querier, fileServer func() http.Handler) store.Querier {
@@ -52,13 +52,13 @@ func newServerHelper(ctx context.Context, envs *types.Config, mongoClient *mongo
 		log.Panic(err)
 	}
 
-	coffeShopBucket := aws.NewS3Client(cfg, func(o *s3.Options) {
+	coffeShopS3Bucket := aws.NewS3Client(cfg, func(o *s3.Options) {
 		o.Region = "us-east-1"
 	})
 
 	tkn := token.NewToken(envs.SECRET_ACCESS_KEY)
 	store := store.NewMongoClient(mongoClient)
-	server.S3Client = coffeShopBucket
+	server.coffeeShopS3Bucket = coffeShopS3Bucket
 	server.Store = store
 	server.envs = envs
 	server.token = tkn

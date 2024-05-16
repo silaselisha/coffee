@@ -11,18 +11,24 @@ import (
 	types "github.com/silaselisha/coffee-api/types"
 )
 
-type CoffeeShopBucket struct {
+type CoffeeShopBucket interface {
+	UploadImage(ctx context.Context, objectKey, bucketName, extension string, image []byte) error
+	UploadMultipleImages(ctx context.Context, payload []*types.PayloadUploadImage, bucket string) error
+	DeleteImage(ctx context.Context, objectKey string, bucket string) error
+}
+
+type CoffeeShopS3Client struct {
 	client *s3.Client
 }
 
-func NewS3Client(config aws.Config, opts ...func(*s3.Options)) *CoffeeShopBucket {
+func NewS3Client(config aws.Config, opts ...func(*s3.Options)) CoffeeShopBucket {
 	client := s3.NewFromConfig(config, opts...)
-	return &CoffeeShopBucket{
+	return &CoffeeShopS3Client{
 		client: client,
 	}
 }
 
-func (csb *CoffeeShopBucket) UploadImage(ctx context.Context, objectKey string, bucketName string, extension string, image []byte) error {
+func (csb *CoffeeShopS3Client) UploadImage(ctx context.Context, objectKey string, bucketName string, extension string, image []byte) error {
 	body := bytes.NewBuffer(image)
 	_, err := csb.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(bucketName),
@@ -40,11 +46,11 @@ func (csb *CoffeeShopBucket) UploadImage(ctx context.Context, objectKey string, 
 	return nil
 }
 
-func (csb *CoffeeShopBucket) UploadMultipleImages(ctx context.Context, payload []*types.PayloadUploadImage, bucket string) error {
+func (csb *CoffeeShopS3Client) UploadMultipleImages(ctx context.Context, payload []*types.PayloadUploadImage, bucketName string) error {
 	for _, image := range payload {
 		body := bytes.NewBuffer(image.Image)
 		_, err := csb.client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket:      aws.String(bucket),
+			Bucket:      aws.String(bucketName),
 			Key:         aws.String(image.ObjectKey),
 			Body:        body,
 			ACL:         s3Types.ObjectCannedACL(*aws.String("public-read")),
@@ -59,9 +65,9 @@ func (csb *CoffeeShopBucket) UploadMultipleImages(ctx context.Context, payload [
 	return nil
 }
 
-func (csb *CoffeeShopBucket) DeleteImage(ctx context.Context, objectKey string, bucket string) error {
+func (csb *CoffeeShopS3Client) DeleteImage(ctx context.Context, objectKey string, bucketName string) error {
 	_, err := csb.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(bucketName),
 		Key:    aws.String(objectKey),
 	})
 

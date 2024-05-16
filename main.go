@@ -32,7 +32,7 @@ func main() {
 		return
 	}
 
-	server, redisOpts, client, mongo_client := mainHelper(ctx, envs)
+	server, redisOpts,  mongo_client, coffeeShopS3Bucket := mainHelper(ctx, envs)
 	defer func() {
 		if err := mongo_client.Disconnect(ctx); err != nil {
 			log.Panic(err)
@@ -40,7 +40,7 @@ func main() {
 		}
 	}()
 
-	go taskProcessor(redisOpts, server.Store, *envs, client)
+	go taskProcessor(redisOpts, server.Store, *envs, coffeeShopS3Bucket)
 
 	fmt.Printf("serving HTTP/REST server\n")
 	fmt.Printf("http://localhost:%v/\n", envs.SERVER_REST_ADDRESS)
@@ -53,7 +53,7 @@ func main() {
 	}
 }
 
-func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, redisOpts asynq.RedisClientOpt, client *aws.CoffeeShopBucket, mongo_client *mongo.Client) {
+func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, redisOpts asynq.RedisClientOpt, mongo_client *mongo.Client, coffeeShopS3Bucket aws.CoffeeShopBucket) {
 	mongo_client, err := internal.Connect(ctx, envs)
 	if err != nil {
 		log.Panic(err)
@@ -75,14 +75,15 @@ func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, re
 		log.Panic(err)
 		return
 	}
-	client = aws.NewS3Client(cfg, func(o *s3.Options) {
+
+	coffeeShopS3Bucket = aws.NewS3Client(cfg, func(o *s3.Options) {
 		o.Region = "us-east-1"
 	})
 	return
 }
 
-func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Config, client *aws.CoffeeShopBucket) {
-	processor := workers.NewTaskServerProcessor(opts, store, envs, client)
+func taskProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs types.Config, coffeeShopS3Bucket aws.CoffeeShopBucket) {
+	processor := workers.NewTaskServerProcessor(opts, store, envs, coffeeShopS3Bucket)
 	log.Print("worker process on")
 	err := processor.Start()
 	if err != nil {
