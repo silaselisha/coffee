@@ -46,11 +46,11 @@ func (csb *CoffeeShopS3Client) UploadImage(ctx context.Context, objectKey string
 	return nil
 }
 
-func (csb *CoffeeShopS3Client) UploadMultipleImages(ctx context.Context, payload []*types.PayloadUploadImage, bucket string) error {
+func (csb *CoffeeShopS3Client) UploadMultipleImages(ctx context.Context, payload []*types.PayloadUploadImage, bucketName string) error {
 	for _, image := range payload {
 		body := bytes.NewBuffer(image.Image)
 		_, err := csb.client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket:      aws.String(bucket),
+			Bucket:      aws.String(bucketName),
 			Key:         aws.String(image.ObjectKey),
 			Body:        body,
 			ACL:         s3Types.ObjectCannedACL(*aws.String("public-read")),
@@ -65,9 +65,9 @@ func (csb *CoffeeShopS3Client) UploadMultipleImages(ctx context.Context, payload
 	return nil
 }
 
-func (csb *CoffeeShopS3Client) DeleteImage(ctx context.Context, objectKey string, bucket string) error {
+func (csb *CoffeeShopS3Client) DeleteImage(ctx context.Context, objectKey string, bucketName string) error {
 	_, err := csb.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(bucketName),
 		Key:    aws.String(objectKey),
 	})
 
