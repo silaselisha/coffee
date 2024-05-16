@@ -4,7 +4,10 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        "futura": ["Futura", "sans-serif"]
+        "futura-light": ["Futura light", "sans-serif"],
+        "futura-regular": ["Futura regular", "sans-serif"],
+        "futura-medium": ["Futura medium", "sans-serif"],
+        "futura-bold": ["Futura bold", "sans-serif"],
       },
     },
   },
