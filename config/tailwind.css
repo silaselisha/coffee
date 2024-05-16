@@ -2,4 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Briem+Hand:wght@100..900&display=swap');
+@layer base {
+    @font-face {
+        font-family: "Futura";
+        src: url(/public/fonts/FUTURA55REGULAR.TTF) format("truetype");
+    }
+}
