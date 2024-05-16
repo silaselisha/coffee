@@ -4,7 +4,22 @@
 
 @layer base {
     @font-face {
-        font-family: "Futura";
+        font-family: "Futura light";
+        src: url(/public/fonts/FUTURA45LIGHT.TTF) format("truetype");
+    }
+
+    @font-face {
+        font-family: "Futura regular";
         src: url(/public/fonts/FUTURA55REGULAR.TTF) format("truetype");
+    }
+
+    @font-face {
+        font-family: "Futura medium";
+        src: url(/public/fonts/FUTURA65MEDIUM.TTF) format("truetype");
+    }
+
+    @font-face {
+        font-family: "Futura bold";
+        src: url(/public/fonts/FUTURA75BOLD.TTF) format("truetype");
     }
 }
