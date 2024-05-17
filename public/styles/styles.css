@@ -758,16 +758,12 @@ video {
   font-family: Futura light, sans-serif;
 }
 
-.font-futura-regular {
-  font-family: Futura regular, sans-serif;
-}
-
-.font-futura-bold {
-  font-family: Futura bold, sans-serif;
-}
-
 .font-futura-medium {
   font-family: Futura medium, sans-serif;
+}
+
+.font-futura-regular {
+  font-family: Futura regular, sans-serif;
 }
 
 .text-4xl {
@@ -802,10 +798,6 @@ video {
 
 .font-bold {
   font-weight: 700;
-}
-
-.font-extrabold {
-  font-weight: 800;
 }
 
 .font-semibold {
@@ -857,6 +849,22 @@ video {
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
+}
+
+.link::after {
+  content: " ";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  width: 0;
+  transition: width 0.35s ease 0s;
+  background-color: #000000;
+  border-radius: 6px;
+}
+
+.link:hover::after {
+  width: 100%;
 }
 
 .hover\:rounded-md:hover {

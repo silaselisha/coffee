@@ -23,3 +23,21 @@
         src: url(/public/fonts/FUTURA75BOLD.TTF) format("truetype");
     }
 }
+
+@layer utilities {
+    .link::after {
+        content: " ";
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        height: 2px;
+        width: 0;
+        transition: width 0.35s ease 0s;
+        background-color: #000000;
+        border-radius: 6px;
+    }
+
+    .link:hover::after {
+        width: 100%;
+    }
+}
