@@ -9,8 +9,10 @@ module.exports = {
         "futura-medium": ["Futura medium", "sans-serif"],
         "futura-bold": ["Futura bold", "sans-serif"],
       },
+      backgroundImage: {
+        "hero-pattern": "url('/public/images/hanging_in_the_tree.jpg')",
+      },
     },
   },
   plugins: [],
-}
-
+};
