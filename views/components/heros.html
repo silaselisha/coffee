@@ -1,20 +1,40 @@
 {{block "heros" .}}
-<div class="h-[450px]" id="">
-  <div class="bg-hero-pattern h-[85%] bg-no-repeat bg-cover bg-center py-4">
+<div class="">
+  <div class="bg-hero-pattern h-[420px] bg-no-repeat bg-cover bg-center py-4">
     <div
-      class="h-full m-auto p-2 flex flex-col item-center justify-center border border-orange-500 w-1/2"
+      class="h-full m-auto p-2 flex flex-col item-center justify-center w-1/2"
     >
-      <div class="">
-        <h1 class="">Amazing coffee for amazing people</h1>
-        <p class="">Give the gift of award-winning coffee.</p>
+      <div
+        class="text-white px-6 py-4 w-4/5 mx-auto flex flex-col justify-center items-center"
+      >
+        <span class="text-6xl font-futura-medium mb-2">
+          Amazing coffee for
+        </span>
+        <span class="text-6xl font-futura-medium mb-2"> amazing people </span>
+        <p class="text-2xl font-futura-light my-2">
+          Give the gift of award-winning coffee.
+        </p>
+
+        <button
+          class="py-2 px-7 uppercase bg-white text-black text-lg font-futura-bold my-4 hover:bg-gray-300 hover:transition-colors hover:ease-in hover:duration-100 hover:delay-100"
+        >
+          Shop Coffee
+        </button>
       </div>
-      <button class="py-2 px-4 uppercase bg-white">Shop Coffee</button>
     </div>
   </div>
 
-  <div class="bg-rose-600 h-[15%]">
-    <h2>Rare coffee is here</h2>
-    <button class="">Shop Rare</button>
+  <div class="bg-rose-500 h-[106px] flex justify-center items-center">
+    <div class="w-1/2 flex justify-between items-center py-4 px-8">
+      <span class="text-white text-4xl font-futura-bold capitalize">
+        rare coffee is here
+      </span>
+      <button
+        class="bg-white font-futura-bold text-rose-500 py-2 px-6 uppercase hover:bg-rose-200 hover:transition-colors hover:delay-200 hover:duration-300 hover:ease-in-out"
+      >
+        Shop Rare
+      </button>
+    </div>
   </div>
 </div>
 {{end}}
