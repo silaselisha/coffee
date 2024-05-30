@@ -1,10 +1,8 @@
 {{block "info_home" .}}
-<div class="border border-orange-500">
-  <div class="border border-yellow-500 px-4 py-10 bg-[#f0e7e4]">
-    <div class="border border-black px-2 py-4">
-      <div
-        class="border border-sky-200 p-3 flex flex-col justify-center items-center"
-      >
+<div class="mt-8">
+  <div class="px-4 py-10 bg-[#f0e7e4]">
+    <div class="px-2 py-4">
+      <div class="p-3 flex flex-col justify-center items-center">
         <h5
           class="uppercase tracking-widest text-sm font-bold font-futura-light my-2"
         >
@@ -17,9 +15,7 @@
           No matter where you are or how you brew it
         </p>
       </div>
-      <div
-        class="border border-green-400 p-3 flex justify-between items-center"
-      >
+      <div class="p-3 flex justify-between items-center">
         <div class="flex flex-col justify-center items-center">
           <h5
             class="uppercase my-2 font-futura-light font-bold text-base tracking-wider"
@@ -74,7 +70,7 @@
   </div>
 
   <!--award winning coffee-->
-  <div class="py-6 border border-sky-500">
+  <div class="pt-6">
     <div class="px-6 py-4">
       <h2 class="text-center text-5xl font-futura-light font-bold">
         Award-winning coffee from around the world, served with a healthy dose
@@ -83,7 +79,64 @@
     </div>
 
     <!--coffee blends-->
-    <div class=""></div>
+    <div class="mt-8 py-8 bg-rose-500 w-full">
+      <div class="flex justify-evenly items-center">
+        <div class="w-[400px] h-[480px]">
+          <div
+            class="h-full w-full bg-info-single-origin bg-cover bg-center bg-no-repeat relative"
+          >
+            <div class="absolute bottom-8 left-6">
+              <h5
+                class="capitalize text-white text-4xl font-bold font-futura-medium my-4"
+              >
+                Single origin
+              </h5>
+              <button
+                class="px-8 py-2 bg-rose-500 uppercase font-futura-medium text-lg"
+              >
+                Shop now
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="w-[400px] h-[480px]">
+          <div
+            class="h-full w-full bg-info-classic-blend bg-cover bg-center bg-no-repeat relative"
+          >
+            <div class="absolute bottom-8 left-6">
+              <h5
+                class="capitalize text-white text-4xl font-bold font-futura-medium my-4"
+              >
+                Classic blends
+              </h5>
+              <button
+                class="px-8 py-2 bg-rose-500 uppercase font-futura-medium text-lg"
+              >
+                Shop now
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="w-[400px] h-[480px]">
+          <div
+            class="h-full w-full bg-info-rare bg-cover bg-center bg-no-repeat relative"
+          >
+            <div class="absolute bottom-8 left-6">
+              <h5
+                class="capitalize text-white text-4xl font-bold font-futura-medium my-4"
+              >
+                Rare
+              </h5>
+              <button
+                class="px-8 py-2 bg-rose-500 uppercase font-futura-medium text-lg"
+              >
+                Shop now
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {{end}}

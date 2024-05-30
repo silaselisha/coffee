@@ -11,6 +11,9 @@ module.exports = {
       },
       backgroundImage: {
         "hero-pattern": "url('/public/images/hanging_in_the_tree.jpg')",
+        "info-classic-blend": "url('/public/images/info-classic-blend.jpg')",
+        "info-rare": "url('/public/images/info-rare.jpg')",
+        "info-single-origin": "url('/public/images/info-single-origin.jpg')",
       },
     },
   },
