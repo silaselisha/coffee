@@ -59,6 +59,7 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	orderPayload := store.Order{
+		Id:        primitive.NewObjectID(),
 		Items:     products,
 		Owner:     userInfo.Id,
 		CreatedAt: time.Now(),
