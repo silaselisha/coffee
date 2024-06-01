@@ -181,6 +181,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 			Images:      updatedDocument.Images,
 			Name:        updatedDocument.Name,
 			Price:       updatedDocument.Price,
+			Discount:    updatedDocument.Discount,
 			Summary:     updatedDocument.Summary,
 			Category:    updatedDocument.Category,
 			Thumbnail:   updatedDocument.Thumbnail,
@@ -270,6 +271,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 			Name:        item.Name,
 			Author:      item.Author,
 			Price:       item.Price,
+			Discount:    item.Discount,
 			Summary:     item.Summary,
 			Category:    item.Category,
 			Thumbnail:   item.Thumbnail,
@@ -313,6 +315,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		Name:        item.Name,
 		Author:      item.Author,
 		Price:       item.Price,
+		Discount:    item.Discount,
 		Summary:     item.Summary,
 		Category:    item.Category,
 		Thumbnail:   item.Thumbnail,
@@ -471,6 +474,16 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 				}
 				item.Price = price
 
+			case "discount":
+				data, err := io.ReadAll(curr)
+				if err != nil {
+					return nil, err
+				}
+				discount, err := strconv.ParseUint(string(data), 10, 32)
+				if err != nil {
+					return nil, err
+				}
+				item.Discount = uint32(discount)
 			case "ingridients":
 				data, err := io.ReadAll(curr)
 				if err != nil {
@@ -574,6 +587,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			Name:        item.Name,
 			Author:      item.Author,
 			Price:       item.Price,
+			Discount:    item.Discount,
 			Ingridients: item.Ingridients,
 			Thumbnail:   item.Thumbnail,
 			Summary:     item.Summary,

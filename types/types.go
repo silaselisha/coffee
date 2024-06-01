@@ -40,6 +40,7 @@ type ItemResponseParams struct {
 	Name        string             `json:"name"`
 	Author      primitive.ObjectID `json:"author"`
 	Price       float64            `json:"price"`
+	Discount    uint32             `json:"discount"`
 	Summary     string             `json:"summary"`
 	Category    string             `json:"category"`
 	Thumbnail   string             `json:"thumbnail"`
@@ -79,18 +80,15 @@ type ErrorResponseParams struct {
 	Error  string `json:"error"`
 }
 
-type OrderItem struct {
+type OrderItemParams struct {
 	Product  string  `bson:"product"`
 	Quantity uint32  `bson:"quantity"`
 	Amount   float64 `bson:"amount"`
+	Discount float64 `bson:"discount"`
 }
 
-type Order struct {
-	Items         []OrderItem        `bson:"items"`
-	TotalAmount   float64            `bson:"total_amount"`
-	Owner         primitive.ObjectID `bson:"owner"`
-	Status        string             `bson:"status"`
-	TotalDiscount float64            `bson:"total_discount"`
+type OrderParams struct {
+	Items []OrderItemParams `bson:"items"`
 }
 
 type Config struct {

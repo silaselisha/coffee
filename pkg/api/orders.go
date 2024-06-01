@@ -27,14 +27,17 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
 	}
 
-	var orderReq types.Order
+	var orderReq types.OrderParams
 	if err := json.Unmarshal(orderBytes, &orderReq); err != nil {
 		response := internal.NewErrorResponse("failed", err.Error())
 		return internal.ResponseHandler(w, response, http.StatusBadRequest)
 	}
 
 	userInfo := ctx.Value(types.AuthUserInfoKey{}).(*types.UserInfo)
+
 	var products []store.OrderItem
+	var totalAmount float64
+	var totalDiscount float64
 
 	for _, order := range orderReq.Items {
 		id, err := primitive.ObjectIDFromHex(order.Product)
@@ -50,20 +53,31 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 			return internal.ResponseHandler(w, response, http.StatusBadRequest)
 		}
 
+		amount := item.Price * float64(order.Quantity)
+		discount := amount * float64(item.Discount) / 100.00
+
 		product := store.OrderItem{
 			Product:  item.Id,
 			Quantity: order.Quantity,
-			Amount:   item.Price * float64(order.Quantity),
+			Amount:   amount,
+			Discount: discount,
 		}
+
 		products = append(products, product)
+		totalDiscount += discount
+
+		totalAmount += (amount - totalDiscount)
 	}
 
 	orderPayload := store.Order{
-		Id:        primitive.NewObjectID(),
-		Items:     products,
-		Owner:     userInfo.Id,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		Id:            primitive.NewObjectID(),
+		Items:         products,
+		Owner:         userInfo.Id,
+		Status:        "pending",
+		TotalAmount:   totalAmount,
+		TotalDiscount: totalDiscount,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 	_, err = ordColl.InsertOne(ctx, orderPayload)
 	if err != nil {

@@ -47,6 +47,7 @@ type OrderItem struct {
 	Product  primitive.ObjectID `bson:"product"`
 	Quantity uint32             `bson:"quantity"`
 	Amount   float64            `bson:"amount"`
+	Discount float64            `bson:"discount"`
 }
 
 type Order struct {
