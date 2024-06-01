@@ -611,12 +611,12 @@ video {
   top: 0.75rem;
 }
 
-.z-50 {
-  z-index: 50;
-}
-
 .z-10 {
   z-index: 10;
+}
+
+.z-50 {
+  z-index: 50;
 }
 
 .m-auto {
@@ -752,8 +752,8 @@ video {
   width: 80%;
 }
 
-.w-\[400px\] {
-  width: 400px;
+.w-\[420px\] {
+  width: 420px;
 }
 
 .w-\[433px\] {
@@ -764,20 +764,8 @@ video {
   width: 100%;
 }
 
-.w-\[420px\] {
-  width: 420px;
-}
-
 .cursor-pointer {
   cursor: pointer;
-}
-
-.cursor-none {
-  cursor: none;
-}
-
-.cursor-vertical-text {
-  cursor: vertical-text;
 }
 
 .cursor-text {
@@ -1191,12 +1179,6 @@ video {
   transition-duration: 150ms;
 }
 
-.transition-all {
-  transition-property: all;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
 .duration-300 {
   transition-duration: 300ms;
 }
@@ -1235,16 +1217,6 @@ video {
   background-color: rgb(254 205 211 / var(--tw-bg-opacity));
 }
 
-.hover\:bg-rose-50:hover {
-  --tw-bg-opacity: 1;
-  background-color: rgb(255 241 242 / var(--tw-bg-opacity));
-}
-
-.hover\:bg-rose-800:hover {
-  --tw-bg-opacity: 1;
-  background-color: rgb(159 18 57 / var(--tw-bg-opacity));
-}
-
 .hover\:bg-rose-600:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(225 29 72 / var(--tw-bg-opacity));
@@ -1272,42 +1244,12 @@ video {
   transition-duration: 150ms;
 }
 
-.hover\:transition:hover {
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-backdrop-filter;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
-.hover\:transition-all:hover {
-  transition-property: all;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
 .hover\:delay-100:hover {
   transition-delay: 100ms;
 }
 
 .hover\:delay-200:hover {
   transition-delay: 200ms;
-}
-
-.hover\:delay-500:hover {
-  transition-delay: 500ms;
-}
-
-.hover\:delay-0:hover {
-  transition-delay: 0s;
-}
-
-.hover\:delay-75:hover {
-  transition-delay: 75ms;
-}
-
-.hover\:delay-1000:hover {
-  transition-delay: 1000ms;
 }
 
 .hover\:duration-100:hover {
@@ -1324,12 +1266,4 @@ video {
 
 .hover\:ease-in-out:hover {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hover\:ease-linear:hover {
-  transition-timing-function: linear;
-}
-
-.hover\:ease-out:hover {
-  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
 }
