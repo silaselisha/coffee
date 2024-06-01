@@ -14,10 +14,10 @@ import (
 	"github.com/silaselisha/coffee-api/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	// TODO: Create a unique order and persit it to the the data Store
 	ordColl := s.Store.Collection(ctx, "coffeeshop", "orders")
 	prodColl := s.Store.Collection(ctx, "coffeeshop", "products")
 
@@ -49,8 +49,12 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 		var item store.Item
 		err = prodColl.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&item)
 		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				response := internal.NewErrorResponse("failed", err.Error())
+				return internal.ResponseHandler(w, response, http.StatusBadRequest)
+			}
 			response := internal.NewErrorResponse("failed", err.Error())
-			return internal.ResponseHandler(w, response, http.StatusBadRequest)
+			return internal.ResponseHandler(w, response, http.StatusInternalServerError)
 		}
 
 		amount := item.Price * float64(order.Quantity)
@@ -84,6 +88,7 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 		response := internal.NewErrorResponse("failed", err.Error())
 		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
 	}
+
 	return internal.ResponseHandler(w, orderPayload, http.StatusCreated)
 }
 
