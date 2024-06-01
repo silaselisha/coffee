@@ -41,6 +41,7 @@ func NewServer(ctx context.Context, envs *types.Config, mongoClient *mongo.Clien
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
 	productRoutes(apiRouter, server)
 	userRoutes(apiRouter, server)
+	orderRoutes(apiRouter, server)
 
 	server.Router = router
 	return server

@@ -40,6 +40,7 @@ type ItemResponseParams struct {
 	Name        string             `json:"name"`
 	Author      primitive.ObjectID `json:"author"`
 	Price       float64            `json:"price"`
+	Discount    uint32             `json:"discount"`
 	Summary     string             `json:"summary"`
 	Category    string             `json:"category"`
 	Thumbnail   string             `json:"thumbnail"`
@@ -79,6 +80,17 @@ type ErrorResponseParams struct {
 	Error  string `json:"error"`
 }
 
+type OrderItemParams struct {
+	Product  string  `bson:"product"`
+	Quantity uint32  `bson:"quantity"`
+	Amount   float64 `bson:"amount"`
+	Discount float64 `bson:"discount"`
+}
+
+type OrderParams struct {
+	Items []OrderItemParams `bson:"items"`
+}
+
 type Config struct {
 	DB_URI               string `mapstructure:"DB_URI"`
 	SMTP_HOST            string `mapstructure:"SMTP_HOST"`
@@ -94,4 +106,3 @@ type Config struct {
 	REDIS_SERVER_PORT    string `mapstructure:"REDIS_SERVER_PORT"`
 	REDIS_SERVER_ADDRESS string `mapstructure:"REDIS_SERVER_ADDRESS"`
 }
-
