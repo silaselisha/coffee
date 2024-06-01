@@ -79,6 +79,20 @@ type ErrorResponseParams struct {
 	Error  string `json:"error"`
 }
 
+type OrderItem struct {
+	Product  string  `bson:"product"`
+	Quantity uint32  `bson:"quantity"`
+	Amount   float64 `bson:"amount"`
+}
+
+type Order struct {
+	Items         []OrderItem        `bson:"items"`
+	TotalAmount   float64            `bson:"total_amount"`
+	Owner         primitive.ObjectID `bson:"owner"`
+	Status        string             `bson:"status"`
+	TotalDiscount float64            `bson:"total_discount"`
+}
+
 type Config struct {
 	DB_URI               string `mapstructure:"DB_URI"`
 	SMTP_HOST            string `mapstructure:"SMTP_HOST"`
@@ -94,4 +108,3 @@ type Config struct {
 	REDIS_SERVER_PORT    string `mapstructure:"REDIS_SERVER_PORT"`
 	REDIS_SERVER_ADDRESS string `mapstructure:"REDIS_SERVER_ADDRESS"`
 }
-

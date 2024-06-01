@@ -3,43 +3,68 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	// TODO: Create a unique order and persit it to the the data Store
+	ordColl := s.Store.Collection(ctx, "coffeeshop", "orders")
+	prodColl := s.Store.Collection(ctx, "coffeeshop", "products")
 
-	fmt.Println("ORDER")
-	collection := s.Store.Collection(ctx, "coffeeshop", "orders")
 	orderBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		response := internal.NewErrorResponse("failed", err.Error())
 		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
 	}
 
-	var orderPayload store.Order
-	if err := json.Unmarshal(orderBytes, &orderPayload); err != nil {
+	var orderReq types.Order
+	if err := json.Unmarshal(orderBytes, &orderReq); err != nil {
 		response := internal.NewErrorResponse("failed", err.Error())
 		return internal.ResponseHandler(w, response, http.StatusBadRequest)
 	}
 
 	userInfo := ctx.Value(types.AuthUserInfoKey{}).(*types.UserInfo)
+	var products []store.OrderItem
 
-	orderPayload.Owner = userInfo.Id
-	for _, order := range orderPayload.Items {
-		// TODO: coveret type string of the order ID into a primitive OBJECT ID
+	for _, order := range orderReq.Items {
+		id, err := primitive.ObjectIDFromHex(order.Product)
+		if err != nil {
+			response := internal.NewErrorResponse("failed", err.Error())
+			return internal.ResponseHandler(w, response, http.StatusBadRequest)
+		}
 
-		fmt.Println(order)
+		var item store.Item
+		err = prodColl.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&item)
+		if err != nil {
+			response := internal.NewErrorResponse("failed", err.Error())
+			return internal.ResponseHandler(w, response, http.StatusBadRequest)
+		}
+
+		product := store.OrderItem{
+			Product:  item.Id,
+			Quantity: order.Quantity,
+			Amount:   item.Price * float64(order.Quantity),
+		}
+		products = append(products, product)
 	}
-	_, err = collection.InsertOne(ctx, orderPayload)
+
+	orderPayload := store.Order{
+		Items:     products,
+		Owner:     userInfo.Id,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	_, err = ordColl.InsertOne(ctx, orderPayload)
 	if err != nil {
 		response := internal.NewErrorResponse("failed", err.Error())
 		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
