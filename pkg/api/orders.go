@@ -76,5 +76,5 @@ func orderRoutes(gmux *mux.Router, srv *Server) {
 	orderRouter := gmux.Methods(http.MethodPost).Subrouter()
 	orderRouter.Use(middleware.AuthMiddleware(srv.token))
 	orderRouter.Use(middleware.RestrictToMiddleware(srv.Store, "user", "admin"))
-	orderRouter.HandleFunc("/orders", internal.HandleFuncDecorator(srv.CreateOrderHandler))
+	orderRouter.HandleFunc("/products/orders", internal.HandleFuncDecorator(srv.CreateOrderHandler))
 }
