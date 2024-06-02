@@ -152,9 +152,12 @@ func NewErrorResponse(status string, err string) *types.ErrorResParams {
 	}
 }
 
-func ReadReqBody[T types.OrderParams | types.UserLoginParams](data io.ReadCloser, sanitizer *validator.Validate) (payload T, err error) {
+func ReadReqBody[T types.UserReqParams | types.OrderParams | types.UserLoginParams | types.ForgotPasswordParams | types.PasswordResetParams](data io.ReadCloser, sanitizer *validator.Validate) (payload T, err error) {
 	payloadBytes, err := io.ReadAll(data)
 	if err != nil {
+		if err == io.EOF {
+			return payload, err
+		}
 		return payload, err
 	}
 	

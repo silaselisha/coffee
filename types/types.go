@@ -21,7 +21,10 @@ type PayloadSendMail struct {
 }
 
 type UserReqParams struct {
-
+	UserName          string             `bson:"username" validate:"required"`
+	Email             string             `bson:"email" validate:"required"`
+	PhoneNumber       string             `bson:"phoneNumber" validate:"required"`
+	Password          string             `bson:"password" validate:"required"`
 }
 
 type UserResParams struct {
