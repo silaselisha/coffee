@@ -17,6 +17,7 @@ import (
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -182,4 +183,24 @@ func ReadReqBody[T types.UserReqParams | types.OrderParams | types.UserLoginPara
 		return payload, err
 	}
 	return payload, err
+}
+
+func ExtractProductsID(orders types.OrderParams) ([]primitive.ObjectID, []store.OrderItem, error) {
+	var products []store.OrderItem
+    var productsIds []primitive.ObjectID
+
+	for _, order := range orders.Items {
+		id, err := primitive.ObjectIDFromHex(order.Product)
+		if err != nil {
+			return nil, nil, err
+		}
+		item := store.OrderItem{
+			Product: id,
+			Quantity: order.Quantity,
+		}
+
+		productsIds = append(productsIds, id)
+		products = append(products, item)
+	}
+	return productsIds, products, nil
 }

@@ -95,7 +95,7 @@ type OrderItemParams struct {
 }
 
 type OrderParams struct {
-	Items []*OrderItemParams `bson:"items" validate:"required"`
+	Items []OrderItemParams `bson:"items" validate:"required"`
 }
 
 type Config struct {
