@@ -1,8 +1,3 @@
-// delete account and it's s3 object
-// updating user profile image then delete the exisitng one
-// resize the image (research)
-// email user code URL for verification, reset password
-// create a path to verify phone number
 package api
 
 import (
@@ -31,18 +26,11 @@ import (
 )
 
 func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	credentialsBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusBadRequest)
-	}
 
-	var credentials types.UserLoginParams
-	json.Unmarshal(credentialsBytes, &credentials)
-	err = s.vd.Struct(credentials)
+	credentials, err := internal.ReadReqBody[types.UserLoginParams](r.Body, s.vd)
 	if err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusBadRequest)
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusBadRequest)
 	}
 
 	var user store.User
@@ -156,7 +144,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 			return nil, err
 		}
 
-		resposne := &types.UserResponseParams{
+		resposne := &types.UserResParams{
 			Id:          user.Id.Hex(),
 			Avatar:      user.Avatar,
 			UserName:    user.UserName,
@@ -205,7 +193,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	if err != nil {
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
-	user := response.(*types.UserResponseParams)
+	user := response.(*types.UserResParams)
 	token, err := jwtoken.CreateToken(ctx, duration, user.Id, user.Email)
 	if err != nil {
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
@@ -214,7 +202,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	result := struct {
 		Status string                    `json:"status"`
 		Token  string                    `json:"token"`
-		Data   *types.UserResponseParams `json:"data"`
+		Data   *types.UserResParams `json:"data"`
 	}{
 		Status: "success",
 		Token:  token,
@@ -226,7 +214,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
-	var users types.UserResponseListParams
+	var users types.UserResListParams
 	curr, err := collection.Find(ctx, bson.D{{}})
 	if err != nil {
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
@@ -244,7 +232,7 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 			return internal.ResponseHandler(w, err, http.StatusInternalServerError)
 		}
 
-		users = append(users, types.UserResponseParams{
+		users = append(users, types.UserResParams{
 			Id:          user.Id.Hex(),
 			Avatar:      user.Avatar,
 			UserName:    user.UserName,
@@ -260,7 +248,7 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 	result := struct {
 		Status string                       `json:"status"`
 		Result int32                        `json:"result"`
-		Data   types.UserResponseListParams `json:"data"`
+		Data   types.UserResListParams `json:"data"`
 	}{
 		Status: "success",
 		Result: int32(len(users)),
@@ -297,7 +285,7 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	resposne := types.UserResponseParams{
+	resposne := types.UserResParams{
 		Id:          user.Id.Hex(),
 		Avatar:      user.Avatar,
 		UserName:    user.UserName,
@@ -311,7 +299,7 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 
 	result := struct {
 		Status string                   `json:"status"`
-		Data   types.UserResponseParams `json:"data"`
+		Data   types.UserResParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   resposne,
@@ -421,7 +409,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	updatedUser := types.UserResponseParams{
+	updatedUser := types.UserResParams{
 		Id:          updatedDocument.Id.Hex(),
 		Avatar:      updatedDocument.Avatar,
 		UserName:    updatedDocument.UserName,
@@ -435,7 +423,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 
 	result := struct {
 		Status string                   `json:"status"`
-		Data   types.UserResponseParams `json:"data"`
+		Data   types.UserResParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   updatedUser,

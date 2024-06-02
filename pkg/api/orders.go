@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"time"
 
@@ -21,16 +19,10 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 	ordColl := s.Store.Collection(ctx, "coffeeshop", "orders")
 	prodColl := s.Store.Collection(ctx, "coffeeshop", "products")
 
-	orderBytes, err := io.ReadAll(r.Body)
+	orderPayload, err := internal.ReadReqBody[types.OrderParams](r.Body, s.vd)
 	if err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
-	}
-
-	var orderReq types.OrderParams
-	if err := json.Unmarshal(orderBytes, &orderReq); err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusBadRequest)
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusBadRequest)
 	}
 
 	userInfo := ctx.Value(types.AuthUserInfoKey{}).(*types.UserInfo)
@@ -39,7 +31,7 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 	var totalAmount float64
 	var totalDiscount float64
 
-	for _, order := range orderReq.Items {
+	for _, order := range orderPayload.Items {
 		id, err := primitive.ObjectIDFromHex(order.Product)
 		if err != nil {
 			response := internal.NewErrorResponse("failed", err.Error())
@@ -73,7 +65,8 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 		totalAmount += (amount - totalDiscount)
 	}
 
-	orderPayload := store.Order{
+	// TODO: introduce enums for order status
+	payload := store.Order{
 		Id:            primitive.NewObjectID(),
 		Items:         products,
 		Owner:         userInfo.Id,
@@ -83,13 +76,13 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
-	_, err = ordColl.InsertOne(ctx, orderPayload)
+	_, err = ordColl.InsertOne(ctx, payload)
 	if err != nil {
 		response := internal.NewErrorResponse("failed", err.Error())
 		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
 	}
 
-	return internal.ResponseHandler(w, orderPayload, http.StatusCreated)
+	return internal.ResponseHandler(w, payload, http.StatusCreated)
 }
 
 func orderRoutes(gmux *mux.Router, srv *Server) {

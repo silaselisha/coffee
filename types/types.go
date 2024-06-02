@@ -20,7 +20,11 @@ type PayloadSendMail struct {
 	Email string `json:"email"`
 }
 
-type UserResponseParams struct {
+type UserReqParams struct {
+
+}
+
+type UserResParams struct {
 	Id          string    `json:"_id"`
 	Avatar      string    `json:"avatar"`
 	UserName    string    `json:"username"`
@@ -32,9 +36,9 @@ type UserResponseParams struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-type UserResponseListParams []UserResponseParams
+type UserResListParams []UserResParams
 
-type ItemResponseParams struct {
+type ItemResParams struct {
 	Id          string             `json:"_id"`
 	Images      []string           `json:"images"`
 	Name        string             `json:"name"`
@@ -51,7 +55,7 @@ type ItemResponseParams struct {
 	UpdatedAt   time.Time          `json:"updated_at"`
 }
 
-type ItemResponseListParams []ItemResponseParams
+type ItemResponseListParams []ItemResParams
 
 type AuthPayloadKey struct{}
 type AuthUserInfoKey struct{}
@@ -75,7 +79,7 @@ type ForgotPasswordParams struct {
 	Email string `bson:"email" validate:"required"`
 }
 
-type ErrorResponseParams struct {
+type ErrorResParams struct {
 	Status string `json:"status"`
 	Error  string `json:"error"`
 }
@@ -88,7 +92,7 @@ type OrderItemParams struct {
 }
 
 type OrderParams struct {
-	Items []OrderItemParams `bson:"items"`
+	Items []*OrderItemParams `bson:"items" validate:"required"`
 }
 
 type Config struct {

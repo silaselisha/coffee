@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/spf13/viper"
@@ -144,9 +145,38 @@ func ImageProcessor(ctx context.Context, file io.ReadCloser, opts *types.FileMet
 	return
 }
 
-func NewErrorResponse(status string, err string) *types.ErrorResponseParams {
-	return &types.ErrorResponseParams{
+func NewErrorResponse(status string, err string) *types.ErrorResParams {
+	return &types.ErrorResParams{
 		Status: status,
 		Error:  err,
 	}
+}
+
+func ReadReqBody[T types.OrderParams | types.UserLoginParams](data io.ReadCloser, sanitizer *validator.Validate) (payload T, err error) {
+	payloadBytes, err := io.ReadAll(data)
+	if err != nil {
+		return payload, err
+	}
+	
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		return payload, err
+	}
+	
+	defer func(payload T) {
+		if dErr := data.Close(); dErr != nil {
+			err = dErr
+			return
+		}
+	}(payload)
+	
+	err = sanitizer.Struct(payload)
+	if err != nil {
+		return payload, err
+	}
+
+	if err != nil {
+		return payload, err
+	}
+	return payload, err
 }
