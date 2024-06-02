@@ -176,7 +176,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
-		product := types.ItemResponseParams{
+		product := types.ItemResParams{
 			Id:          updatedDocument.Id.Hex(),
 			Images:      updatedDocument.Images,
 			Name:        updatedDocument.Name,
@@ -226,10 +226,10 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 
 	result := struct {
 		Status string                   `json:"status"`
-		Data   types.ItemResponseParams `json:"data"`
+		Data   types.ItemResParams `json:"data"`
 	}{
 		Status: "success",
-		Data:   response.(types.ItemResponseParams),
+		Data:   response.(types.ItemResParams),
 	}
 	return internal.ResponseHandler(w, result, http.StatusOK)
 }
@@ -265,7 +265,7 @@ func (s *Server) GetAllProductsHandler(ctx context.Context, w http.ResponseWrite
 			return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 		}
 
-		product := types.ItemResponseParams{
+		product := types.ItemResParams{
 			Id:          item.Id.Hex(),
 			Images:      item.Images,
 			Name:        item.Name,
@@ -309,7 +309,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	product := types.ItemResponseParams{
+	product := types.ItemResParams{
 		Id:          item.Id.Hex(),
 		Images:      item.Images,
 		Name:        item.Name,
@@ -328,7 +328,7 @@ func (s *Server) GetProductByIdHandler(ctx context.Context, w http.ResponseWrite
 
 	res := struct {
 		Status string                   `json:"status"`
-		Data   types.ItemResponseParams `json:"data"`
+		Data   types.ItemResParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   product,
@@ -581,7 +581,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			return nil, err
 		}
 
-		product := types.ItemResponseParams{
+		product := types.ItemResParams{
 			Id:          item.Id.Hex(),
 			Images:      item.Images,
 			Name:        item.Name,
@@ -624,10 +624,10 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 		}
 	}
 
-	product := resposne.(types.ItemResponseParams)
+	product := resposne.(types.ItemResParams)
 	result := struct {
 		Status string                   `json:"status"`
-		Data   types.ItemResponseParams `json:"data"`
+		Data   types.ItemResParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   product,

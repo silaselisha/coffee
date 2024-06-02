@@ -2,8 +2,7 @@ package api
 
 import (
 	"context"
-	"encoding/json"
-	"io"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -21,75 +20,89 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 	ordColl := s.Store.Collection(ctx, "coffeeshop", "orders")
 	prodColl := s.Store.Collection(ctx, "coffeeshop", "products")
 
-	orderBytes, err := io.ReadAll(r.Body)
+	orderPayload, err := internal.ReadReqBody[types.OrderParams](r.Body, s.vd)
 	if err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
-	}
-
-	var orderReq types.OrderParams
-	if err := json.Unmarshal(orderBytes, &orderReq); err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusBadRequest)
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusBadRequest)
 	}
 
 	userInfo := ctx.Value(types.AuthUserInfoKey{}).(*types.UserInfo)
 
-	var products []store.OrderItem
+	productsID, cart, err := internal.ExtractProductsID(orderPayload)
+	if err != nil {
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusInternalServerError)
+	}
+	
+	cur, err := prodColl.Find(ctx, bson.M{"_id": bson.M{"$in": productsID}})
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			res := internal.NewErrorResponse("failed", err.Error())
+			return internal.ResponseHandler(w, res, http.StatusNotFound)
+		}
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusInternalServerError)
+	}
+
+	defer cur.Close(ctx)
+	products := make(map[primitive.ObjectID]store.Item)
+	for cur.Next(ctx) {
+		var item store.Item
+		err := cur.Decode(&item)
+		if err != nil {
+			res := internal.NewErrorResponse("failed", err.Error())
+			return internal.ResponseHandler(w, res, http.StatusInternalServerError)
+		}
+		products[item.Id] = item
+	}
+
+	if err := cur.Err(); err != nil {
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusInternalServerError)
+	}
+
 	var totalAmount float64
 	var totalDiscount float64
-
-	for _, order := range orderReq.Items {
-		id, err := primitive.ObjectIDFromHex(order.Product)
-		if err != nil {
-			response := internal.NewErrorResponse("failed", err.Error())
-			return internal.ResponseHandler(w, response, http.StatusBadRequest)
+	var orderItems []store.OrderItem
+	for _, order := range cart {
+		product, ok := products[order.Product]
+		if !ok {
+			res := internal.NewErrorResponse("failed", fmt.Errorf("product not found").Error())
+			return internal.ResponseHandler(w, res, http.StatusNotFound)
 		}
 
-		var item store.Item
-		err = prodColl.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&item)
-		if err != nil {
-			if err == mongo.ErrNoDocuments {
-				response := internal.NewErrorResponse("failed", err.Error())
-				return internal.ResponseHandler(w, response, http.StatusBadRequest)
-			}
-			response := internal.NewErrorResponse("failed", err.Error())
-			return internal.ResponseHandler(w, response, http.StatusInternalServerError)
-		}
-
-		amount := item.Price * float64(order.Quantity)
-		discount := amount * float64(item.Discount) / 100.00
-
-		product := store.OrderItem{
-			Product:  item.Id,
-			Quantity: order.Quantity,
-			Amount:   amount,
-			Discount: discount,
-		}
-
-		products = append(products, product)
+		amount := product.Price * float64(order.Quantity)
+		discount := (amount / 100.00) * float64(product.Discount)
+		totalAmount += (amount - discount)
 		totalDiscount += discount
 
-		totalAmount += (amount - totalDiscount)
+		orderItem := store.OrderItem{
+			Product: product.Id,
+			Quantity: order.Quantity,
+			Amount: amount,
+			Discount: discount,
+		}
+		orderItems = append(orderItems, orderItem)
 	}
 
-	orderPayload := store.Order{
-		Id:            primitive.NewObjectID(),
-		Items:         products,
-		Owner:         userInfo.Id,
-		Status:        "pending",
-		TotalAmount:   totalAmount,
+	order := store.Order {
+		Id: primitive.NewObjectID(),
+		Items: orderItems,
+		TotalAmount: totalAmount,
+		Owner: userInfo.Id,
+		Status: "pending",
 		TotalDiscount: totalDiscount,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-	}
-	_, err = ordColl.InsertOne(ctx, orderPayload)
-	if err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusInternalServerError)
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
-	return internal.ResponseHandler(w, orderPayload, http.StatusCreated)
+	_, err = ordColl.InsertOne(ctx, order)
+	if err != nil {
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusInternalServerError)
+	}
+
+	return internal.ResponseHandler(w, order, http.StatusCreated)
 }
 
 func orderRoutes(gmux *mux.Router, srv *Server) {

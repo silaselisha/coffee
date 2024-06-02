@@ -59,7 +59,7 @@ func TestCreateProduct(t *testing.T) {
 				require.Equal(t, nil, err)
 				var result struct {
 					Status string
-					Data   types.ItemResponseParams
+					Data   types.ItemResParams
 				}
 
 				fmt.Println(string(dataBytes))

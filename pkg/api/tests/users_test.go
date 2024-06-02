@@ -38,7 +38,7 @@ func TestCreateUserSignup(t *testing.T) {
 				var result struct {
 					Status string
 					Token  string
-					Data   types.UserResponseParams
+					Data   types.UserResParams
 				}
 				body, err := io.ReadAll(recorder.Body)
 

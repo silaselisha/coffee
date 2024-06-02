@@ -1,8 +1,3 @@
-// delete account and it's s3 object
-// updating user profile image then delete the exisitng one
-// resize the image (research)
-// email user code URL for verification, reset password
-// create a path to verify phone number
 package api
 
 import (
@@ -10,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -31,18 +25,11 @@ import (
 )
 
 func (s *Server) LoginUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	credentialsBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusBadRequest)
-	}
 
-	var credentials types.UserLoginParams
-	json.Unmarshal(credentialsBytes, &credentials)
-	err = s.vd.Struct(credentials)
+	credentials, err := internal.ReadReqBody[types.UserLoginParams](r.Body, s.vd)
 	if err != nil {
-		response := internal.NewErrorResponse("failed", err.Error())
-		return internal.ResponseHandler(w, response, http.StatusBadRequest)
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusBadRequest)
 	}
 
 	var user store.User
@@ -115,32 +102,25 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 			return nil, err
 		}
 
-		var user store.User
-
-		userBytes, err := io.ReadAll(r.Body)
-		if err != nil {
-			if err == io.EOF {
-				return nil, err
-			}
-			return nil, err
-		}
-
-		err = json.Unmarshal(userBytes, &user)
+		signupData, err := internal.ReadReqBody[types.UserReqParams](r.Body, s.vd)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := s.vd.Struct(user); err != nil {
-			return nil, err
+		hashedPassword := internal.PasswordEncryption([]byte(signupData.Password))
+		// TODO: implement enums for user roles
+		user := store.User{
+			Id:          primitive.NewObjectID(),
+			UserName:    signupData.UserName,
+			Email:       signupData.Email,
+			PhoneNumber: signupData.Password,
+			Role:        "user",
+			Avatar:      "default.jpeg",
+			Password:    hashedPassword,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
 		}
 
-		hashedPassword := internal.PasswordEncryption([]byte(user.Password))
-		user.Id = primitive.NewObjectID()
-		user.Role = "user"
-		user.Avatar = "default.jpeg"
-		user.Password = hashedPassword
-		user.CreatedAt = time.Now()
-		user.UpdatedAt = time.Now()
 		_, err = collection.InsertOne(ctx, user)
 		if err != nil {
 			return nil, err
@@ -156,7 +136,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 			return nil, err
 		}
 
-		resposne := &types.UserResponseParams{
+		resposne := &types.UserResParams{
 			Id:          user.Id.Hex(),
 			Avatar:      user.Avatar,
 			UserName:    user.UserName,
@@ -205,16 +185,16 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 	if err != nil {
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
-	user := response.(*types.UserResponseParams)
+	user := response.(*types.UserResParams)
 	token, err := jwtoken.CreateToken(ctx, duration, user.Id, user.Email)
 	if err != nil {
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
 	result := struct {
-		Status string                    `json:"status"`
-		Token  string                    `json:"token"`
-		Data   *types.UserResponseParams `json:"data"`
+		Status string               `json:"status"`
+		Token  string               `json:"token"`
+		Data   *types.UserResParams `json:"data"`
 	}{
 		Status: "success",
 		Token:  token,
@@ -226,7 +206,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
-	var users types.UserResponseListParams
+	var users types.UserResListParams
 	curr, err := collection.Find(ctx, bson.D{{}})
 	if err != nil {
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
@@ -244,7 +224,7 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 			return internal.ResponseHandler(w, err, http.StatusInternalServerError)
 		}
 
-		users = append(users, types.UserResponseParams{
+		users = append(users, types.UserResParams{
 			Id:          user.Id.Hex(),
 			Avatar:      user.Avatar,
 			UserName:    user.UserName,
@@ -258,9 +238,9 @@ func (s *Server) GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter,
 	}
 
 	result := struct {
-		Status string                       `json:"status"`
-		Result int32                        `json:"result"`
-		Data   types.UserResponseListParams `json:"data"`
+		Status string                  `json:"status"`
+		Result int32                   `json:"result"`
+		Data   types.UserResListParams `json:"data"`
 	}{
 		Status: "success",
 		Result: int32(len(users)),
@@ -297,7 +277,7 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	resposne := types.UserResponseParams{
+	resposne := types.UserResParams{
 		Id:          user.Id.Hex(),
 		Avatar:      user.Avatar,
 		UserName:    user.UserName,
@@ -310,8 +290,8 @@ func (s *Server) GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	result := struct {
-		Status string                   `json:"status"`
-		Data   types.UserResponseParams `json:"data"`
+		Status string              `json:"status"`
+		Data   types.UserResParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   resposne,
@@ -421,7 +401,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}
 
-	updatedUser := types.UserResponseParams{
+	updatedUser := types.UserResParams{
 		Id:          updatedDocument.Id.Hex(),
 		Avatar:      updatedDocument.Avatar,
 		UserName:    updatedDocument.UserName,
@@ -434,8 +414,8 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 	}
 
 	result := struct {
-		Status string                   `json:"status"`
-		Data   types.UserResponseParams `json:"data"`
+		Status string              `json:"status"`
+		Data   types.UserResParams `json:"data"`
 	}{
 		Status: "success",
 		Data:   updatedUser,
@@ -490,18 +470,14 @@ func (s *Server) DeleteUserByIdHandler(ctx context.Context, w http.ResponseWrite
 func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	collection := s.Store.Collection(ctx, "coffeeshop", "users")
 
-	var forgotPassword types.ForgotPasswordParams
-	forgotPasswordBytes, err := io.ReadAll(r.Body)
+	resetPasswordData, err := internal.ReadReqBody[types.ForgotPasswordParams](r.Body, s.vd)
 	if err != nil {
-		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusBadRequest)
-	}
-	err = json.Unmarshal(forgotPasswordBytes, &forgotPassword)
-	if err != nil {
-		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusBadRequest)
 	}
 
 	var user store.User
-	curr := collection.FindOne(ctx, bson.D{{Key: "email", Value: forgotPassword.Email}})
+	curr := collection.FindOne(ctx, bson.D{{Key: "email", Value: resetPasswordData.Email}})
 	err = curr.Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -558,20 +534,14 @@ func (s *Server) ResetPasswordHandler(ctx context.Context, w http.ResponseWriter
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusBadRequest)
 	}
 
-	var passwordRest types.PasswordResetParams
-	passwordRestBytes, err := io.ReadAll(r.Body)
+	passwordResetData, err := internal.ReadReqBody[types.PasswordResetParams](r.Body, s.vd)
 	if err != nil {
-		err = fmt.Errorf("invalid data for password rset %w", err)
-		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusBadRequest)
+		err = fmt.Errorf("invalid data for paswword reset %w", err)
+		res := internal.NewErrorResponse("failed", err.Error())
+		return internal.ResponseHandler(w, res, http.StatusBadRequest)
 	}
 
-	err = json.Unmarshal(passwordRestBytes, &passwordRest)
-	if err != nil {
-		err = fmt.Errorf("invalid data for password reset %w", err)
-		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusBadRequest)
-	}
-
-	password := internal.PasswordEncryption([]byte(passwordRest.Password))
+	password := internal.PasswordEncryption([]byte(passwordResetData.Password))
 	updatedAt := time.Now()
 	passwordChangedAt := time.Now()
 

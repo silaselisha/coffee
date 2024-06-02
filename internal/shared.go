@@ -13,9 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -144,9 +146,61 @@ func ImageProcessor(ctx context.Context, file io.ReadCloser, opts *types.FileMet
 	return
 }
 
-func NewErrorResponse(status string, err string) *types.ErrorResponseParams {
-	return &types.ErrorResponseParams{
+func NewErrorResponse(status string, err string) *types.ErrorResParams {
+	return &types.ErrorResParams{
 		Status: status,
 		Error:  err,
 	}
+}
+
+func ReadReqBody[T types.UserReqParams | types.OrderParams | types.UserLoginParams | types.ForgotPasswordParams | types.PasswordResetParams](data io.ReadCloser, sanitizer *validator.Validate) (payload T, err error) {
+	payloadBytes, err := io.ReadAll(data)
+	if err != nil {
+		if err == io.EOF {
+			return payload, err
+		}
+		return payload, err
+	}
+	
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		return payload, err
+	}
+	
+	defer func(payload T) {
+		if dErr := data.Close(); dErr != nil {
+			err = dErr
+			return
+		}
+	}(payload)
+	
+	err = sanitizer.Struct(payload)
+	if err != nil {
+		return payload, err
+	}
+
+	if err != nil {
+		return payload, err
+	}
+	return payload, err
+}
+
+func ExtractProductsID(orders types.OrderParams) ([]primitive.ObjectID, []store.OrderItem, error) {
+	var products []store.OrderItem
+    var productsIds []primitive.ObjectID
+
+	for _, order := range orders.Items {
+		id, err := primitive.ObjectIDFromHex(order.Product)
+		if err != nil {
+			return nil, nil, err
+		}
+		item := store.OrderItem{
+			Product: id,
+			Quantity: order.Quantity,
+		}
+
+		productsIds = append(productsIds, id)
+		products = append(products, item)
+	}
+	return productsIds, products, nil
 }
