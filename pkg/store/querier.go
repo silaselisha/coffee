@@ -3,6 +3,9 @@ package store
 import (
 	"context"
 	"net/http"
+
+	"github.com/silaselisha/coffee-api/types"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Querier interface {
@@ -11,7 +14,7 @@ type Querier interface {
 	ProductsQueries
 }
 
-type UsersQueries interface{
+type UsersQueries interface {
 	CreateUserHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetAllUsersHandlers(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetUserByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
@@ -27,6 +30,7 @@ type ProductsQueries interface {
 	DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
+	BatchGetAllProductsByIds(ctx context.Context, data []primitive.ObjectID) (map[primitive.ObjectID]types.ItemResParams, error)
 }
 
 type OrdersQueries interface {
