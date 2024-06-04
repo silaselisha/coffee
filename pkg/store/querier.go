@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/silaselisha/coffee-api/types"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -30,7 +29,7 @@ type ProductsQueries interface {
 	DeleteProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetAllProductsHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 	GetProductByIdHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) error
-	BatchGetAllProductsByIds(ctx context.Context, data []primitive.ObjectID) (map[primitive.ObjectID]types.ItemResParams, error)
+	BatchGetAllProductsByIds(ctx context.Context, data []primitive.ObjectID) (map[primitive.ObjectID]Item, error)
 }
 
 type OrdersQueries interface {

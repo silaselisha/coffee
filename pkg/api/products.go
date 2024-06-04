@@ -636,7 +636,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 	return internal.ResponseHandler(w, result, http.StatusCreated)
 }
 
-func (s *Server) BatchGetAllProductsByIds(ctx context.Context, data []primitive.ObjectID) (products map[primitive.ObjectID]types.ItemResParams, err error) {
+func (s *Server) BatchGetAllProductsByIds(ctx context.Context, data []primitive.ObjectID) (products map[primitive.ObjectID]store.Item, err error) {
 	prodColl := s.Store.Collection(ctx, "coffeeshop", "products")
 
 	cur, err := prodColl.Find(ctx, bson.M{"_id": bson.M{"$in": data}})
@@ -644,34 +644,27 @@ func (s *Server) BatchGetAllProductsByIds(ctx context.Context, data []primitive.
 		return nil, err
 	}
 
-	fmt.Printf("Product IDs: %+v\n", data)
-
 	defer func() {
 		if dErr := cur.Close(ctx); dErr != nil {
 			err = dErr
 		}
 	}()
 
+	products = make(map[primitive.ObjectID]store.Item)
 	for cur.Next(ctx) {
-		var item types.ItemResParams
+		var item store.Item
 		err := cur.Decode(&item)
 		if err != nil {
 			return nil, err
 		}
-
-		fmt.Printf("Item: %+v\n", item)
-		id, err := primitive.ObjectIDFromHex(item.Id)
-		if err != nil {
-			fmt.Printf("Product ID: %+v\n", item.Id)
-			return nil, err
-		}
-		products[id] = item
+		
+		products[item.Id] = item
 	}
 
 	if err := cur.Err(); err != nil {
 		return nil, err
 	}
-	return products, err
+	return
 }
 
 func productRoutes(gmux *mux.Router, srv *Server) {
