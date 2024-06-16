@@ -30,7 +30,7 @@ type TaskProcessor interface {
 	ProcessTaskMultipleUploadS3Object(ctx context.Context, task *asynq.Task) error
 }
 
-type RedisTaskServerProcessor struct {
+type RedisSrvTaskProcessor struct {
 	server             *asynq.Server
 	store              store.Mongo
 	envs               types.Config
@@ -46,7 +46,7 @@ func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs t
 		}),
 	})
 
-	return &RedisTaskServerProcessor{
+	return &RedisSrvTaskProcessor{
 		server:             server,
 		store:              store,
 		envs:               envs,
@@ -54,7 +54,7 @@ func NewTaskServerProcessor(opts asynq.RedisClientOpt, store store.Mongo, envs t
 	}
 }
 
-func (processor *RedisTaskServerProcessor) ProcessTaskSendVerificationMail(ctx context.Context, task *asynq.Task) error {
+func (processor *RedisSrvTaskProcessor) ProcessTaskSendVerificationMail(ctx context.Context, task *asynq.Task) error {
 	user, err := getUserByEmail(ctx, processor, task)
 	if err != nil {
 		return fmt.Errorf("error occured while retreiving user %w", err)
@@ -76,7 +76,7 @@ func (processor *RedisTaskServerProcessor) ProcessTaskSendVerificationMail(ctx c
 	return nil
 }
 
-func (processor *RedisTaskServerProcessor) ProcessTaskSendResetPasswordMail(ctx context.Context, task *asynq.Task) error {
+func (processor *RedisSrvTaskProcessor) ProcessTaskSendResetPasswordMail(ctx context.Context, task *asynq.Task) error {
 	user, err := getUserByEmail(ctx, processor, task)
 	if err != nil {
 		return fmt.Errorf("error occured while retreiving user %w", err)
@@ -94,7 +94,69 @@ func (processor *RedisTaskServerProcessor) ProcessTaskSendResetPasswordMail(ctx 
 	return nil
 }
 
-func getUserByEmail(ctx context.Context, processor *RedisTaskServerProcessor, task *asynq.Task) (store.User, error) {
+func (processor *RedisSrvTaskProcessor) ProcessTaskUploadS3Object(ctx context.Context, task *asynq.Task) error {
+	var Payload types.PayloadUploadImage
+	err := json.Unmarshal(task.Payload(), &Payload)
+	if err != nil {
+		fmt.Print(time.Now())
+		return fmt.Errorf("unmarshalling error %w", err)
+	}
+
+	fmt.Printf("BEGIN @%+v\n", time.Now())
+	fmt.Printf("start processing task %+s\n", task.Type())
+
+	err = processor.coffeeShopS3Bucket.UploadImage(ctx, Payload.ObjectKey, processor.envs.S3_BUCKET_NAME, Payload.Extension, Payload.Image)
+	if err != nil {
+		fmt.Print(time.Now())
+		return err
+	}
+	fmt.Printf("END @%+v\n", time.Now())
+
+	return nil
+}
+
+func (processor *RedisSrvTaskProcessor) ProcessTaskMultipleUploadS3Object(ctx context.Context, task *asynq.Task) error {
+	var Payload []*types.PayloadUploadImage
+	err := json.Unmarshal(task.Payload(), &Payload)
+	if err != nil {
+		fmt.Print(time.Now())
+		return fmt.Errorf("unmarshalling error %w", err)
+	}
+
+	fmt.Printf("BEGIN @%+v\n", time.Now())
+	fmt.Printf("start processing task %+s\n", task.Type())
+
+	err = processor.coffeeShopS3Bucket.UploadMultipleImages(ctx, Payload, processor.envs.S3_BUCKET_NAME)
+	if err != nil {
+		fmt.Print(time.Now())
+		return err
+	}
+	fmt.Printf("END @%+v\n", time.Now())
+
+	return nil
+}
+
+func (processor *RedisSrvTaskProcessor) ProcessTaskDeleteS3Object(ctx context.Context, task *asynq.Task) error {
+	var payload []string
+	err := json.Unmarshal(task.Payload(), &payload)
+	if err != nil {
+		return fmt.Errorf("error occured while unmarshalling %w", err)
+	}
+
+	fmt.Printf("BEGIN @%+v\n", time.Now())
+	fmt.Printf("start processing task %+s\n", task.Type())
+	for _, image := range payload {
+		err := processor.coffeeShopS3Bucket.DeleteImage(ctx, image, processor.envs.S3_BUCKET_NAME)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+	fmt.Printf("END @%+v\n", time.Now())
+	return nil
+}
+
+func getUserByEmail(ctx context.Context, processor *RedisSrvTaskProcessor, task *asynq.Task) (store.User, error) {
 	var Payload types.PayloadSendMail
 	err := json.Unmarshal(task.Payload(), &Payload)
 	if err != nil {
@@ -117,69 +179,7 @@ func getUserByEmail(ctx context.Context, processor *RedisTaskServerProcessor, ta
 	return user, nil
 }
 
-func (processor *RedisTaskServerProcessor) ProcessTaskUploadS3Object(ctx context.Context, task *asynq.Task) error {
-	var Payload types.PayloadUploadImage
-	err := json.Unmarshal(task.Payload(), &Payload)
-	if err != nil {
-		fmt.Print(time.Now())
-		return fmt.Errorf("unmarshalling error %w", err)
-	}
-
-	fmt.Printf("BEGIN @%+v\n", time.Now())
-	fmt.Printf("start processing task %+s\n", task.Type())
-
-	err = processor.coffeeShopS3Bucket.UploadImage(ctx, Payload.ObjectKey, processor.envs.S3_BUCKET_NAME, Payload.Extension, Payload.Image)
-	if err != nil {
-		fmt.Print(time.Now())
-		return err
-	}
-	fmt.Printf("END @%+v\n", time.Now())
-
-	return nil
-}
-
-func (processor *RedisTaskServerProcessor) ProcessTaskMultipleUploadS3Object(ctx context.Context, task *asynq.Task) error {
-	var Payload []*types.PayloadUploadImage
-	err := json.Unmarshal(task.Payload(), &Payload)
-	if err != nil {
-		fmt.Print(time.Now())
-		return fmt.Errorf("unmarshalling error %w", err)
-	}
-
-	fmt.Printf("BEGIN @%+v\n", time.Now())
-	fmt.Printf("start processing task %+s\n", task.Type())
-
-	err = processor.coffeeShopS3Bucket.UploadMultipleImages(ctx, Payload, processor.envs.S3_BUCKET_NAME)
-	if err != nil {
-		fmt.Print(time.Now())
-		return err
-	}
-	fmt.Printf("END @%+v\n", time.Now())
-
-	return nil
-}
-
-func (processor *RedisTaskServerProcessor) ProcessTaskDeleteS3Object(ctx context.Context, task *asynq.Task) error {
-	var payload []string
-	err := json.Unmarshal(task.Payload(), &payload)
-	if err != nil {
-		return fmt.Errorf("error occured while unmarshalling %w", err)
-	}
-
-	fmt.Printf("BEGIN @%+v\n", time.Now())
-	fmt.Printf("start processing task %+s\n", task.Type())
-	for _, image := range payload {
-		err := processor.coffeeShopS3Bucket.DeleteImage(ctx, image, processor.envs.S3_BUCKET_NAME)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
-	}
-	fmt.Printf("END @%+v\n", time.Now())
-	return nil
-}
-
-func (processor *RedisTaskServerProcessor) Start() error {
+func (processor *RedisSrvTaskProcessor) Start() error {
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(SEND_VERIFICATION_EMAIL, processor.ProcessTaskSendVerificationMail)
 	mux.HandleFunc(SEND_PASSWORD_RESET_EMAIL, processor.ProcessTaskSendResetPasswordMail)

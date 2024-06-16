@@ -131,7 +131,7 @@ func (s *Server) CreateUserHandler(ctx context.Context, w http.ResponseWriter, r
 			asynq.ProcessIn(3 * time.Second),
 			asynq.Queue(workers.CriticalQueue),
 		}
-		err = s.distributor.SendVerificationMailTask(ctx, &types.PayloadSendMail{Email: user.Email}, opts...)
+		err = s.taskDistributor.VerificationMailTask(ctx, &types.PayloadSendMail{Email: user.Email}, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -346,7 +346,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 				return
 			}
 
-			err = s.distributor.SendS3ObjectUploadTask(ctx, &types.PayloadUploadImage{
+			err = s.taskDistributor.S3ObjectUploadTask(ctx, &types.PayloadUploadImage{
 				Image:     data,
 				ObjectKey: objectKey,
 				Extension: extension,
@@ -357,7 +357,7 @@ func (s *Server) UpdateUserByIdHandler(ctx context.Context, w http.ResponseWrite
 			if err != nil {
 				errs <- err
 			}
-			err = s.distributor.SendS3ObjectDeleteTask(ctx, []string{userInfo.Avatar}, []asynq.Option{asynq.ProcessIn(3 * time.Minute),
+			err = s.taskDistributor.S3ObjectDeleteTask(ctx, []string{userInfo.Avatar}, []asynq.Option{asynq.ProcessIn(3 * time.Minute),
 				asynq.MaxRetry(3),
 				asynq.Queue(workers.CriticalQueue)}...)
 			if err != nil {
@@ -492,7 +492,7 @@ func (s *Server) ForgotPasswordHandler(ctx context.Context, w http.ResponseWrite
 		asynq.MaxRetry(10),
 		asynq.Queue("critical"),
 	}
-	err = s.distributor.SendPasswordResetMailTask(ctx, &types.PayloadSendMail{Email: user.Email}, opts...)
+	err = s.taskDistributor.PasswordResetMailTask(ctx, &types.PayloadSendMail{Email: user.Email}, opts...)
 	if err != nil {
 		return internal.ResponseHandler(w, internal.NewErrorResponse("failed", err.Error()), http.StatusInternalServerError)
 	}

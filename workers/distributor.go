@@ -4,50 +4,47 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/types"
 )
 
+const (
+	UPLOAD_S3_OBJECT           = "task:upload_s3_object"
+	UPLOAD_MULTIPLE_S3_OBJECTS = "task:upload_multiple_s3_objects"
+	DELETE_S3_OBJECT           = "task:delete_s3_object"
+	SEND_VERIFICATION_EMAIL    = "task:send_verification_email"
+	SEND_PASSWORD_RESET_EMAIL  = "task:send_password_reset_email"
+)
+
 type TaskDistributor interface {
-	SendVerificationMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error
-	SendPasswordResetMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error
-	SendS3ObjectUploadTask(ctx context.Context, payload *types.PayloadUploadImage, opts ...asynq.Option) error
-	SendMultipleS3ObjectUploadTask(ctx context.Context, payload []*types.PayloadUploadImage, opts ...asynq.Option) error
-	SendS3ObjectDeleteTask(ctx context.Context, images []string, opts ...asynq.Option) error
+	VerificationMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error
+	PasswordResetMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error
+	S3ObjectUploadTask(ctx context.Context, payload *types.PayloadUploadImage, opts ...asynq.Option) error
+	MultipleS3ObjectUploadTask(ctx context.Context, payload []*types.PayloadUploadImage, opts ...asynq.Option) error
+	S3ObjectDeleteTask(ctx context.Context, images []string, opts ...asynq.Option) error
 }
 
-type RedisTaskClientDistributor struct {
+type RedisClientTaskDistributor struct {
 	client *asynq.Client
 }
 
-const (
-	UPLOAD_S3_OBJECT           string = "task:upload_s3_object"
-	UPLOAD_MULTIPLE_S3_OBJECTS string = "task:upload_multiple_s3_objects"
-	DELETE_S3_OBJECT           string = "task:delete_s3_object"
-	SEND_VERIFICATION_EMAIL    string = "task:send_verification_email"
-	SEND_PASSWORD_RESET_EMAIL  string = "task:send_password_reset_email"
-)
-
 func NewTaskClientDistributor(opts asynq.RedisClientOpt) TaskDistributor {
 	client := asynq.NewClient(opts)
-	return &RedisTaskClientDistributor{
+	return &RedisClientTaskDistributor{
 		client: client,
 	}
 }
 
-func (distributor *RedisTaskClientDistributor) SendVerificationMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error {
-	payloadBuffer, err := json.Marshal(payload)
+func (dist *RedisClientTaskDistributor) VerificationMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error {
+	data, err := json.Marshal(payload)
 	if err != nil {
-		fmt.Print(time.Now())
 		return fmt.Errorf("marshal error %w", err)
 	}
 
-	task := asynq.NewTask(SEND_VERIFICATION_EMAIL, payloadBuffer, opts...)
-	info, err := distributor.client.EnqueueContext(ctx, task)
+	task := asynq.NewTask(SEND_VERIFICATION_EMAIL, data, opts...)
+	info, err := dist.client.EnqueueContext(ctx, task)
 	if err != nil {
-		fmt.Print(time.Now())
 		return fmt.Errorf("enqueueing task error %w", err)
 	}
 
@@ -55,17 +52,15 @@ func (distributor *RedisTaskClientDistributor) SendVerificationMailTask(ctx cont
 	return nil
 }
 
-func (distributor *RedisTaskClientDistributor) SendPasswordResetMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error {
-	payloadBuffer, err := json.Marshal(payload)
+func (dist *RedisClientTaskDistributor) PasswordResetMailTask(ctx context.Context, payload *types.PayloadSendMail, opts ...asynq.Option) error {
+	data, err := json.Marshal(payload)
 	if err != nil {
-		fmt.Print(time.Now())
 		return fmt.Errorf("marshal error %w", err)
 	}
 
-	task := asynq.NewTask(SEND_PASSWORD_RESET_EMAIL, payloadBuffer, opts...)
-	info, err := distributor.client.EnqueueContext(ctx, task)
+	task := asynq.NewTask(SEND_PASSWORD_RESET_EMAIL, data, opts...)
+	info, err := dist.client.EnqueueContext(ctx, task)
 	if err != nil {
-		fmt.Print(time.Now())
 		return fmt.Errorf("enqueueing task error %w", err)
 	}
 
@@ -73,16 +68,15 @@ func (distributor *RedisTaskClientDistributor) SendPasswordResetMailTask(ctx con
 	return nil
 }
 
-func (distributor *RedisTaskClientDistributor) SendS3ObjectUploadTask(ctx context.Context, payload *types.PayloadUploadImage, opts ...asynq.Option) error {
-	payloadBuffer, err := json.Marshal(payload)
+func (dist *RedisClientTaskDistributor) S3ObjectUploadTask(ctx context.Context, payload *types.PayloadUploadImage, opts ...asynq.Option) error {
+	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal error %w", err)
 	}
 
-	task := asynq.NewTask(UPLOAD_S3_OBJECT, payloadBuffer, opts...)
-	info, err := distributor.client.EnqueueContext(ctx, task)
+	task := asynq.NewTask(UPLOAD_S3_OBJECT, data, opts...)
+	info, err := dist.client.EnqueueContext(ctx, task)
 	if err != nil {
-		fmt.Print(time.Now())
 		return fmt.Errorf("enqueueing task error %w", err)
 	}
 
@@ -91,16 +85,15 @@ func (distributor *RedisTaskClientDistributor) SendS3ObjectUploadTask(ctx contex
 	return nil
 }
 
-func (distributor *RedisTaskClientDistributor) SendMultipleS3ObjectUploadTask(ctx context.Context, payload []*types.PayloadUploadImage, opts ...asynq.Option) error {
-	payloadBuffer, err := json.Marshal(payload)
+func (dist *RedisClientTaskDistributor) MultipleS3ObjectUploadTask(ctx context.Context, payload []*types.PayloadUploadImage, opts ...asynq.Option) error {
+	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal error %w", err)
 	}
 
-	task := asynq.NewTask(UPLOAD_MULTIPLE_S3_OBJECTS, payloadBuffer, opts...)
-	info, err := distributor.client.EnqueueContext(ctx, task)
+	task := asynq.NewTask(UPLOAD_MULTIPLE_S3_OBJECTS, data, opts...)
+	info, err := dist.client.EnqueueContext(ctx, task)
 	if err != nil {
-		fmt.Print(time.Now())
 		return fmt.Errorf("enqueueing task error %w", err)
 	}
 
@@ -108,14 +101,14 @@ func (distributor *RedisTaskClientDistributor) SendMultipleS3ObjectUploadTask(ct
 	return nil
 }
 
-func (distributor *RedisTaskClientDistributor) SendS3ObjectDeleteTask(ctx context.Context, images []string, opts ...asynq.Option) error {
-	payload, err := json.Marshal(images)
+func (dist *RedisClientTaskDistributor) S3ObjectDeleteTask(ctx context.Context, images []string, opts ...asynq.Option) error {
+	data, err := json.Marshal(images)
 	if err != nil {
 		return fmt.Errorf("error occured while marshaling %w", err)
 	}
 
-	task := asynq.NewTask(DELETE_S3_OBJECT, payload, opts...)
-	info, err := distributor.client.EnqueueContext(ctx, task)
+	task := asynq.NewTask(DELETE_S3_OBJECT, data, opts...)
+	info, err := dist.client.EnqueueContext(ctx, task)
 	if err != nil {
 		return fmt.Errorf("enqueueing task error %w", err)
 	}
