@@ -26,7 +26,7 @@ type Server struct {
 	vd                 *validator.Validate
 	envs               *types.Config
 	token              token.Token
-	distributor        workers.TaskDistributor
+	taskDistributor    workers.TaskDistributor
 }
 
 func NewServer(ctx context.Context, envs *types.Config, mongoClient *mongo.Client, distributor workers.TaskDistributor, templQueries handler.Querier, fileServer func() http.Handler) store.Querier {
@@ -63,7 +63,7 @@ func newServerHelper(ctx context.Context, envs *types.Config, mongoClient *mongo
 	server.Store = store
 	server.envs = envs
 	server.token = tkn
-	server.distributor = distributor
+	server.taskDistributor = distributor
 
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	server.vd = validate

@@ -134,7 +134,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 					}
 
 					thumbnails := []string{item.Thumbnail}
-					err := s.distributor.SendS3ObjectDeleteTask(ctx, thumbnails, opts...)
+					err := s.taskDistributor.S3ObjectDeleteTask(ctx, thumbnails, opts...)
 					if err != nil {
 						return nil, err
 					}
@@ -147,7 +147,7 @@ func (s *Server) UpdateProductHandler(ctx context.Context, w http.ResponseWriter
 				}
 
 				objectKey := fmt.Sprintf("images/products/thumbnails/%s", fileName)
-				err = s.distributor.SendS3ObjectUploadTask(ctx, &types.PayloadUploadImage{
+				err = s.taskDistributor.S3ObjectUploadTask(ctx, &types.PayloadUploadImage{
 					Image:     image,
 					Extension: extension,
 					ObjectKey: objectKey,
@@ -377,7 +377,7 @@ func (s *Server) DeleteProductByIdHandler(ctx context.Context, w http.ResponseWr
 			asynq.Queue(workers.CriticalQueue),
 		}
 
-		err = s.distributor.SendS3ObjectDeleteTask(ctx, images, opts...)
+		err = s.taskDistributor.S3ObjectDeleteTask(ctx, images, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -534,7 +534,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 					asynq.Queue(workers.CriticalQueue),
 				}
 
-				err = s.distributor.SendS3ObjectUploadTask(ctx, &types.PayloadUploadImage{
+				err = s.taskDistributor.S3ObjectUploadTask(ctx, &types.PayloadUploadImage{
 					ObjectKey: objectKey,
 					Extension: extension,
 					Image:     data,
@@ -564,7 +564,7 @@ func (s *Server) CreateProductHandler(ctx context.Context, w http.ResponseWriter
 			asynq.ProcessIn(2 * time.Second),
 			asynq.Queue(workers.CriticalQueue),
 		}
-		err = s.distributor.SendMultipleS3ObjectUploadTask(ctx, images, opts...)
+		err = s.taskDistributor.MultipleS3ObjectUploadTask(ctx, images, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -657,7 +657,7 @@ func (s *Server) BatchGetAllProductsByIds(ctx context.Context, data []primitive.
 		if err != nil {
 			return nil, err
 		}
-		
+
 		products[item.Id] = item
 	}
 

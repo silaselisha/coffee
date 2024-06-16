@@ -7,11 +7,17 @@ import (
 )
 
 type PaymentStatus int
+type UserRole int
 
 const (
 	PAID PaymentStatus = iota
 	PENDING
 	REJECTED
+)
+
+const (
+	USER UserRole = iota
+	ADMIN
 )
 
 type FileMetadata struct {
