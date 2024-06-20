@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/internal"
-	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/types"
@@ -609,36 +608,4 @@ func (s *Server) VerifyAccountHandler(ctx context.Context, w http.ResponseWriter
 		Data:   "account verified",
 	}
 	return internal.ResponseHandler(w, result, http.StatusOK)
-}
-
-func userRoutes(gmux *mux.Router, srv *Server) {
-	userGetRouter := gmux.Methods(http.MethodGet).Subrouter()
-	postUserRouter := gmux.Methods(http.MethodPost).Subrouter()
-	forgotPasswordRouter := gmux.Methods(http.MethodPost).Subrouter()
-	updateUserRouter := gmux.Methods(http.MethodPut).Subrouter()
-	resetPasswordRouter := gmux.Methods(http.MethodPut).Subrouter()
-	deleteUserRouter := gmux.Methods(http.MethodDelete).Subrouter()
-
-	userGetRouter.Use(middleware.AuthMiddleware(srv.token))
-
-	getAllUsersRouter := userGetRouter.PathPrefix("/").Subrouter()
-	getAllUsersRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	getAllUsersRouter.HandleFunc("/users", internal.HandleFuncDecorator(srv.GetAllUsersHandlers))
-
-	getUserByIdRouter := userGetRouter.PathPrefix("/").Subrouter()
-	getUserByIdRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin", "user"))
-	getUserByIdRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.GetUserByIdHandler))
-
-	postUserRouter.HandleFunc("/signup", internal.HandleFuncDecorator(srv.CreateUserHandler))
-	postUserRouter.HandleFunc("/login", internal.HandleFuncDecorator(srv.LoginUserHandler))
-
-	updateUserRouter.Use(middleware.AuthMiddleware(srv.token))
-	updateUserRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin", "user"))
-	updateUserRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.UpdateUserByIdHandler))
-
-	deleteUserRouter.Use(middleware.AuthMiddleware(srv.token))
-	deleteUserRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin", "user"))
-	deleteUserRouter.HandleFunc("/users/{id}", internal.HandleFuncDecorator(srv.DeleteUserByIdHandler))
-	forgotPasswordRouter.HandleFunc("/forgotpassword", internal.HandleFuncDecorator(srv.ForgotPasswordHandler))
-	resetPasswordRouter.HandleFunc("/resetpassword", internal.HandleFuncDecorator(srv.ResetPasswordHandler))
 }

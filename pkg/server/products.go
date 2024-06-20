@@ -16,7 +16,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/internal"
-	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/silaselisha/coffee-api/workers"
@@ -667,27 +666,4 @@ func (s *Server) BatchGetAllProductsByIds(ctx context.Context, data []primitive.
 	return
 }
 
-func productRoutes(gmux *mux.Router, srv *Server) {
-	getItemsRouter := gmux.Methods(http.MethodGet).Subrouter()
-	postItemsRouter := gmux.Methods(http.MethodPost).Subrouter()
-	deleteItemsRouter := gmux.Methods(http.MethodDelete).Subrouter()
-	updateItemsRouter := gmux.Methods(http.MethodPut).Subrouter()
 
-	postItemsRouter.Use(middleware.AuthMiddleware(srv.token))
-	postProductsRouter := postItemsRouter.PathPrefix("/").Subrouter()
-	postProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	postProductsRouter.HandleFunc("/products", internal.HandleFuncDecorator(srv.CreateProductHandler))
-
-	getItemsRouter.HandleFunc("/products", internal.HandleFuncDecorator(srv.GetAllProductsHandler))
-	getItemsRouter.HandleFunc("/products/{category}/{id}", internal.HandleFuncDecorator(srv.GetProductByIdHandler))
-
-	deleteItemsRouter.Use(middleware.AuthMiddleware(srv.token))
-	deleteProductsRouter := deleteItemsRouter.PathPrefix("/products").Subrouter()
-	deleteProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	deleteProductsRouter.HandleFunc("/{id}", internal.HandleFuncDecorator(srv.DeleteProductByIdHandler))
-
-	updateItemsRouter.Use(middleware.AuthMiddleware(srv.token))
-	updateProductsRouter := updateItemsRouter.PathPrefix("/products").Subrouter()
-	updateProductsRouter.Use(middleware.RestrictToMiddleware(srv.Store, "admin"))
-	updateProductsRouter.HandleFunc("/{id}", internal.HandleFuncDecorator(srv.UpdateProductHandler))
-}
