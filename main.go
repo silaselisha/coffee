@@ -14,8 +14,8 @@ import (
 	"github.com/rs/cors"
 	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/internal/aws"
-	"github.com/silaselisha/coffee-api/pkg/api"
-	"github.com/silaselisha/coffee-api/pkg/handler"
+	"github.com/silaselisha/coffee-api/pkg/client"
+	api "github.com/silaselisha/coffee-api/pkg/server"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"github.com/silaselisha/coffee-api/workers"
@@ -64,7 +64,7 @@ func mainHelper(ctx context.Context, envs *types.Config) (server *api.Server, re
 		Addr: envs.REDIS_SERVER_ADDRESS,
 	}
 
-	templQueries := handler.NewTemplate(".")
+	templQueries := client.NewTemplate(".")
 
 	distributor := workers.NewTaskClientDistributor(redisOpts)
 	querier := api.NewServer(ctx, envs, mongo_client, distributor, templQueries, public)

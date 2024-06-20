@@ -14,8 +14,8 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/silaselisha/coffee-api/internal"
-	"github.com/silaselisha/coffee-api/pkg/api"
-	"github.com/silaselisha/coffee-api/pkg/handler"
+	"github.com/silaselisha/coffee-api/pkg/client"
+	api "github.com/silaselisha/coffee-api/pkg/server"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/workers"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 		Addr: envs.REDIS_SERVER_ADDRESS,
 	}
 
-	templQueries := handler.NewTemplate("../../..")
+	templQueries := client.NewTemplate("../../..")
 	distributor = workers.NewTaskClientDistributor(redisOpts)
 	querier := api.NewServer(context.Background(), envs, mongoClient, distributor, templQueries, func() http.Handler { return nil })
 

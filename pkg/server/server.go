@@ -1,4 +1,4 @@
-package api
+package server
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/internal"
 	"github.com/silaselisha/coffee-api/internal/aws"
-	"github.com/silaselisha/coffee-api/pkg/handler"
+	"github.com/silaselisha/coffee-api/pkg/client"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/types"
@@ -29,7 +29,7 @@ type Server struct {
 	taskDistributor    workers.TaskDistributor
 }
 
-func NewServer(ctx context.Context, envs *types.Config, mongoClient *mongo.Client, distributor workers.TaskDistributor, templQueries handler.Querier, fileServer func() http.Handler) store.Querier {
+func NewServer(ctx context.Context, envs *types.Config, mongoClient *mongo.Client, distributor workers.TaskDistributor, templQueries client.Querier, fileServer func() http.Handler) store.Querier {
 	server := &Server{}
 
 	newServerHelper(ctx, envs, mongoClient, server, distributor)
@@ -69,7 +69,7 @@ func newServerHelper(ctx context.Context, envs *types.Config, mongoClient *mongo
 	server.vd = validate
 }
 
-func render(router *mux.Router, templQueries handler.Querier, fileServer func() http.Handler) {
+func render(router *mux.Router, templQueries client.Querier, fileServer func() http.Handler) {
 	router.PathPrefix("/public/").Handler(fileServer())
 	router.HandleFunc("/", internal.HandleFuncDecorator(templQueries.RenderHomePageHandler))
 }
