@@ -1411,8 +1411,41 @@ video {
     display: block;
   }
 
+  .md\:w-1\/2 {
+    width: 50%;
+  }
+
+  .md\:w-4\/5 {
+    width: 80%;
+  }
+
+  .md\:text-5xl {
+    font-size: 3rem;
+    line-height: 1;
+  }
+
+  .md\:text-6xl {
+    font-size: 3.75rem;
+    line-height: 1;
+  }
+
   .md\:font-thin {
     font-weight: 100;
+  }
+
+  @media (min-width: 1024px) {
+    .md\:lg\:text-6xl {
+      font-size: 3.75rem;
+      line-height: 1;
+    }
+
+    .md\:lg\:w-4\/5 {
+      width: 80%;
+    }
+
+    .md\:lg\:w-1\/2 {
+      width: 50%;
+    }
   }
 }
 
