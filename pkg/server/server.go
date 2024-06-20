@@ -13,8 +13,8 @@ import (
 	"github.com/silaselisha/coffee-api/internal/aws"
 	"github.com/silaselisha/coffee-api/pkg/client"
 	"github.com/silaselisha/coffee-api/pkg/store"
-	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/types"
+	"github.com/silaselisha/coffee-api/pkg/token"
 	"github.com/silaselisha/coffee-api/workers"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -25,7 +25,7 @@ type Server struct {
 	coffeeShopS3Bucket aws.CoffeeShopBucket
 	vd                 *validator.Validate
 	envs               *types.Config
-	token              token.Token
+	Token              token.Token
 	taskDistributor    workers.TaskDistributor
 }
 
@@ -62,7 +62,7 @@ func newServerHelper(ctx context.Context, envs *types.Config, mongoClient *mongo
 	server.coffeeShopS3Bucket = coffeShopS3Bucket
 	server.Store = store
 	server.envs = envs
-	server.token = tkn
+	server.Token = tkn
 	server.taskDistributor = distributor
 
 	validate := validator.New(validator.WithRequiredStructEnabled())

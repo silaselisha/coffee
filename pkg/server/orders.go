@@ -6,9 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/silaselisha/coffee-api/internal"
-	"github.com/silaselisha/coffee-api/pkg/middleware"
 	"github.com/silaselisha/coffee-api/pkg/store"
 	"github.com/silaselisha/coffee-api/types"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -42,7 +40,7 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 	var orderItems []store.OrderItem
 	for _, order := range cart {
 		product, ok := products[order.Product]
-	
+
 		if !ok {
 			res := internal.NewErrorResponse("failed", fmt.Errorf("product not found").Error())
 			return internal.ResponseHandler(w, res, http.StatusNotFound)
@@ -80,11 +78,4 @@ func (s *Server) CreateOrderHandler(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	return internal.ResponseHandler(w, order, http.StatusCreated)
-}
-
-func orderRoutes(gmux *mux.Router, srv *Server) {
-	orderRouter := gmux.Methods(http.MethodPost).Subrouter()
-	orderRouter.Use(middleware.AuthMiddleware(srv.token))
-	orderRouter.Use(middleware.RestrictToMiddleware(srv.Store, "user", "admin"))
-	orderRouter.HandleFunc("/products/orders", internal.HandleFuncDecorator(srv.CreateOrderHandler))
 }
