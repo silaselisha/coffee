@@ -28,7 +28,11 @@ func NewS3Client(config aws.Config, opts ...func(*s3.Options)) CoffeeShopBucket 
 	}
 }
 
-func (csb *CoffeeShopS3Client) UploadImage(ctx context.Context, objectKey string, bucketName string, extension string, image []byte) error {
+func (csb *CoffeeShopS3Client) UploadImage(ctx context.Context, 
+	objectKey string, 
+	bucketName string, 
+	extension string, 
+	image []byte) error {
 	body := bytes.NewBuffer(image)
 	_, err := csb.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(bucketName),
@@ -46,7 +50,9 @@ func (csb *CoffeeShopS3Client) UploadImage(ctx context.Context, objectKey string
 	return nil
 }
 
-func (csb *CoffeeShopS3Client) UploadMultipleImages(ctx context.Context, payload []*types.PayloadUploadImage, bucketName string) error {
+func (csb *CoffeeShopS3Client) UploadMultipleImages(ctx context.Context, 
+	payload []*types.PayloadUploadImage, 
+	bucketName string) error {
 	for _, image := range payload {
 		body := bytes.NewBuffer(image.Image)
 		_, err := csb.client.PutObject(ctx, &s3.PutObjectInput{
